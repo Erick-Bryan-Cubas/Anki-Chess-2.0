@@ -25,6 +25,16 @@ export const cleanComment = (comment: string | null | undefined) =>
 export const hasPgnComments = (rawPgn: string | undefined | null) =>
   (rawPgn?.match(/\{[^}]*\}/g) ?? []).some((c) => cleanComment(c.slice(1, -1)).length > 0);
 
+/*
+ * Some sources (ChessBase, Lichess copies...) write castling with zeros (0-0, 0-0-0),
+ * which the PGN parser rejects. Only tokens standing as a move are converted, so
+ * results like 1-0 / 0-1 are left untouched. (No lookbehind: unsupported on older iOS.)
+ */
+export const normalizeCastling = (pgn: string) =>
+  pgn.replace(/(^|[\s.(])0-0(-0)?(?=$|[\s)+#!?])/gm, (_, prefix, long) =>
+    `${prefix}O-O${long ? '-O' : ''}`,
+  );
+
 export function mirrorPGN(parsedPGN: CustomPgnGame, mirrorState: MirrorState): void {
   let pgnBaseFen = parsedPGN.tags?.FEN ?? DEFAULT_POSITION;
   const isValidMirrorFen = !checkCastleRights(pgnBaseFen);
@@ -55,6 +65,8 @@ export function parsePGN(rawPgn: string): ParsedObject {
     }
     const fen = ok ? pgnCheck : DEFAULT_POSITION;
     pgnCheck = `[Event "AI Mode"]\n[FEN "${fen}"]\n[SetUp "1"]\n\n*`;
+  } else {
+    pgnCheck = normalizeCastling(pgnCheck);
   }
 
   // Attempt parsing and log error
