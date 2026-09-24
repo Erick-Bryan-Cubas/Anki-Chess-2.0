@@ -1,0 +1,6 @@
+- **deck_prefix**: prefixo do baralho sugerido (`Lichess::<nome do estudo>`). Vazio = só o nome do estudo.
+- **include_games**: marca por padrão os capítulos que são partidas completas (sem FEN).
+- **update_existing**: ao reimportar, atualiza as notas existentes em vez de pular.
+- **strip_anno**: remove os marcadores `[%anno ...]` que o Lichess deixa nos comentários.
+- **base_note_type**: último note type base usado (Flipped/Study são clonados dele).
+- **lichess_token**: token pessoal (escopo `study:read`) para baixar estudos privados. Fica em texto puro.
