@@ -1,4 +1,5 @@
 {
+  "language": "en",
   "deck_prefix": "Lichess",
   "include_games": false,
   "update_existing": false,

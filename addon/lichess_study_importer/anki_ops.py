@@ -10,6 +10,7 @@ import re
 
 from aqt import mw
 
+from .i18n import tr
 from .pgn_split import MODE_FLIPPED, MODE_PUZZLE, MODE_STUDY, Chapter
 
 # Same markers used by the AnkiChess Companion add-on
@@ -58,7 +59,7 @@ def _set_template_config(qfmt: str, overrides: dict) -> str:
     if CONFIG_PLACEHOLDER in qfmt:
         repl = f"window.USER_CONFIG = {json.dumps(overrides, indent=2)};"
         return qfmt.replace(CONFIG_PLACEHOLDER, repl)
-    raise ChessImportError("O template não tem bloco window.USER_CONFIG para configurar o modo.")
+    raise ChessImportError(tr("warn.no_user_config"))
 
 
 def ensure_mode_note_type(base: dict, mode: str) -> dict:
@@ -106,7 +107,7 @@ def import_chapters(col, rows, deck_name: str, update_existing: bool, strip_anno
     rows: list of (Chapter, note type dict). Runs inside a CollectionOp; `stats`
     is filled with created/updated/skipped counts.
     """
-    undo_pos = col.add_custom_undo_entry("Importar estudo do Lichess")
+    undo_pos = col.add_custom_undo_entry(tr("undo.import"))
     deck_id = col.decks.id(deck_name)
 
     for ch, model in rows:

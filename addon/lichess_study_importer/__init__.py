@@ -6,9 +6,8 @@ Creates one AnkiChess note per chapter of a Lichess study.
 from aqt import gui_hooks, mw
 from aqt.qt import QAction
 
-from .dialog import show_import_dialog
-
-ACTION_TEXT = "Importar estudo do Lichess..."
+from .dialog import apply_language, show_import_dialog
+from .i18n import tr
 
 
 def _find_ankichess_menu():
@@ -20,7 +19,8 @@ def _find_ankichess_menu():
 
 
 def setup_menu():
-    action = QAction(ACTION_TEXT, mw)
+    apply_language()
+    action = QAction(tr("menu.import"), mw)
     action.triggered.connect(show_import_dialog)
     mw.form.menuTools.addAction(action)
 
