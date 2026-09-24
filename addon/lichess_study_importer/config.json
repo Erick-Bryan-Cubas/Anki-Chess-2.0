@@ -1,0 +1,8 @@
+{
+  "deck_prefix": "Lichess",
+  "include_games": false,
+  "update_existing": false,
+  "strip_anno": true,
+  "base_note_type": "",
+  "lichess_token": ""
+}
