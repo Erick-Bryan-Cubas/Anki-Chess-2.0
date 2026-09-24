@@ -67,3 +67,27 @@ npm run build:anki-media
 
 files generated in 'dist-anki'
 
+# Lichess Study Importer (add-on)
+
+`addon/lichess_study_importer` is a separate Anki add-on that creates **one AnkiChess note per chapter** of a Lichess study.
+
+- Menu: `Tools > Importar estudo do Lichess...` (also added to the Companion's `AnkiChess` menu when installed).
+- Source: an exported study `.pgn` file, or a study/chapter URL (public API; private studies need a personal token with the `study:read` scope).
+- Every chapter is listed with a suggested mode, which you can change:
+  - **Puzzle**: you play the side to move.
+  - **Flipped**: the first move belongs to the opponent ("Jogam as brancas").
+  - **Study**: you play both sides. Used for full games, which are optional and unchecked by default.
+- Each mode uses its own note type (`<base>`, `<base> Flipped`, `<base> Study`). Missing ones are cloned from the base note type with `flipBoard`/`playBothSides` set.
+- Re-importing skips chapters already imported (matched by chapter URL), or updates them if you choose.
+
+```bash
+npm run test:addon    # unit tests (pytest)
+npm run build:addon   # dist-anki/lichess_study_importer.ankiaddon
+```
+
+Install the `.ankiaddon` with `Tools > Add-ons > Install from file...`, or for development link the folder into `addons21`:
+
+```powershell
+New-Item -ItemType Junction -Path "$env:APPDATA\Anki2\addons21\lichess_study_importer" -Target "$PWD\addon\lichess_study_importer"
+```
+
