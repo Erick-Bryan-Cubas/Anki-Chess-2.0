@@ -53,6 +53,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "form.deck": "Deck:",
         "form.update_existing": "Update notes already imported (otherwise skip them)",
         "button.import": "Import",
+        "button.cancel": "Cancel",
         "warn.no_note_types": (
             "<b>No AnkiChess note type found.</b> Install the AnkiChess template "
             "(apkg or Companion add-on) before importing."
@@ -122,6 +123,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "form.deck": "Baralho:",
         "form.update_existing": "Atualizar notas já importadas (senão, pula)",
         "button.import": "Importar",
+        "button.cancel": "Cancelar",
         "warn.no_note_types": (
             "<b>Nenhum note type AnkiChess encontrado.</b> Instale o template AnkiChess "
             "(apkg ou Companion Add-on) antes de importar."

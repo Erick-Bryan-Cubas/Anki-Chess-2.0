@@ -162,6 +162,8 @@ class StudyImportDialog(QDialog):
         self.import_btn = buttons.button(QDialogButtonBox.StandardButton.Ok)
         self.import_btn.setText(tr("button.import"))
         self.import_btn.setEnabled(False)
+        # Standard buttons follow Anki's language; keep them in the add-on's language
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(tr("button.cancel"))
         buttons.accepted.connect(self.on_import)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
