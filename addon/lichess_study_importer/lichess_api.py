@@ -17,7 +17,12 @@ USER_AGENT = "AnkiChess-StudyImporter"
 
 
 class LichessError(Exception):
-    pass
+    """Carries an i18n key (see i18n.py) and its parameters; the UI translates it."""
+
+    def __init__(self, key: str, **params):
+        super().__init__(key)
+        self.key = key
+        self.params = params
 
 
 def parse_study_url(text: str) -> tuple[str, str | None] | None:
@@ -47,14 +52,11 @@ def fetch_study_pgn(
     except urllib.error.HTTPError as e:
         if e.code in (401, 403, 404):
             hint = (
-                "Confira se o token tem o escopo 'study:read' e acesso ao estudo."
-                if token.strip()
-                else "Se o estudo é privado, informe um token pessoal do Lichess "
-                "(escopo 'study:read') ou exporte o PGN e use 'Abrir arquivo .pgn'."
+                "error.no_access.token_hint" if token.strip() else "error.no_access.public_hint"
             )
-            raise LichessError(f"Estudo não encontrado ou sem acesso (HTTP {e.code}). {hint}") from e
+            raise LichessError("error.no_access", code=e.code, hint=hint) from e
         if e.code == 429:
-            raise LichessError("Muitas requisições ao Lichess. Aguarde um minuto e tente novamente.") from e
-        raise LichessError(f"Erro HTTP {e.code} ao baixar o estudo.") from e
+            raise LichessError("error.rate_limited") from e
+        raise LichessError("error.http", code=e.code) from e
     except urllib.error.URLError as e:
-        raise LichessError(f"Falha de conexão com o Lichess: {e.reason}") from e
+        raise LichessError("error.connection", reason=e.reason) from e

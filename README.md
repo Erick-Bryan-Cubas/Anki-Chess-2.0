@@ -71,7 +71,8 @@ files generated in 'dist-anki'
 
 `addon/lichess_study_importer` is a separate Anki add-on that creates **one AnkiChess note per chapter** of a Lichess study.
 
-- Menu: `Tools > Importar estudo do Lichess...` (also added to the Companion's `AnkiChess` menu when installed).
+- Menu: `Tools > Import Lichess study...` (also added to the Companion's `AnkiChess` menu when installed).
+- Interface in English (default) or Brazilian Portuguese: set `"language"` to `"en"`, `"pt-BR"` or `"auto"` (follow Anki's language) in `Tools > Add-ons > Config`.
 - Source: an exported study `.pgn` file, or a study/chapter URL (public API; private studies need a personal token with the `study:read` scope).
 - Every chapter is listed with a suggested mode, which you can change:
   - **Puzzle**: you play the side to move.

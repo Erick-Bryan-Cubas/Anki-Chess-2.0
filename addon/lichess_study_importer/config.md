@@ -1,6 +1,7 @@
-- **deck_prefix**: prefixo do baralho sugerido (`Lichess::<nome do estudo>`). Vazio = só o nome do estudo.
-- **include_games**: marca por padrão os capítulos que são partidas completas (sem FEN).
-- **update_existing**: ao reimportar, atualiza as notas existentes em vez de pular.
-- **strip_anno**: remove os marcadores `[%anno ...]` que o Lichess deixa nos comentários.
-- **base_note_type**: último note type base usado (Flipped/Study são clonados dele).
-- **lichess_token**: token pessoal (escopo `study:read`) para baixar estudos privados. Fica em texto puro.
+- **language**: interface language. `"en"` (default), `"pt-BR"`, or `"auto"` to follow Anki's interface language. The menu entry updates after restarting Anki; the dialog updates the next time it opens.
+- **deck_prefix**: prefix for the suggested deck (`Lichess::<study name>`). Empty = just the study name.
+- **include_games**: select full-game chapters (no FEN) by default.
+- **update_existing**: on re-import, update notes already imported instead of skipping them.
+- **strip_anno**: remove the `[%anno ...]` markers Lichess leaves in comments.
+- **base_note_type**: last base note type used (Flipped/Study note types are cloned from it).
+- **lichess_token**: personal token (`study:read` scope) to download private studies. Stored as plain text.
