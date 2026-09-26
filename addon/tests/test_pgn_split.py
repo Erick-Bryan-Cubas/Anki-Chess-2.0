@@ -76,6 +76,26 @@ def test_crlf_and_single_game_without_tags():
     assert len(chs) == 1 and chs[0].kind == p.KIND_GAME
 
 
+def test_quotes_in_tag_values_are_kept_escaped():
+    # Lichess escapes quotes in chapter names; the rebuilt PGN must keep them escaped
+    text = '[ChapterName "\\"Let Me Introduce You\\" - Foreword"]\n[Annotator "a\\\\b"]\n\n1. e4 *\n'
+    ch = p.split_games(text)[0]
+    assert ch.name == '"Let Me Introduce You" - Foreword'
+    assert ch.tags["Annotator"] == "a\\b"
+    pgn = ch.pgn()
+    assert '[ChapterName "\\"Let Me Introduce You\\" - Foreword"]' in pgn
+    assert '[Annotator "a\\\\b"]' in pgn
+    assert p.split_games(pgn)[0].tags == ch.tags  # round trip
+
+
+def test_malformed_comment_commands_are_dropped():
+    text = "1. e4 { [%t@Shrt] Venice [%t Shrt] [%cal Ga1a2] [%eval 0.3] [%x] [%t,v] } *"
+    pgn = p.split_games(text)[0].pgn(strip_anno=False)
+    assert "[%t@Shrt]" not in pgn and "[%x]" not in pgn and "[%t,v]" not in pgn
+    assert "[%t Shrt]" in pgn and "[%cal Ga1a2]" in pgn and "[%eval 0.3]" in pgn
+    assert "Venice" in pgn
+
+
 @pytest.mark.parametrize(
     "url,expected",
     [

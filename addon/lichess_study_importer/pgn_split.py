@@ -14,6 +14,9 @@ COMMENT_RE = re.compile(r"\{[^}]*\}")
 CHAPTER_URL_RE = re.compile(r"/study/([A-Za-z0-9]{8})/([A-Za-z0-9]{8})")
 ANNO_RE = re.compile(r"\[%anno\b[^\]]*\]")
 EMPTY_COMMENT_RE = re.compile(r"\{\s*\}")
+# Embedded comment commands ([%cal ...]); the template parser only accepts "[%name value]"
+COMMAND_RE = re.compile(r"\[%[^\]]*\]")
+VALID_COMMAND_RE = re.compile(r"\[%\s*[\w.-]+\s+[^\]\s][^\]]*\]")
 # A SAN move (or castling), used to decide if a chapter has any moves at all.
 SAN_RE = re.compile(r"(?<![\w-])(?:O-O(?:-O)?|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?)[+#]?")
 # First move of the movetext, with the (optional) leading and trailing comments.
@@ -105,9 +108,29 @@ class Chapter:
         return text[:60] + ("…" if len(text) > 60 else "")
 
     def pgn(self, strip_anno: bool = True) -> str:
-        header = "\n".join(f'[{k} "{v}"]' for k, v in self.tags.items())
-        body = sanitize(self.movetext) if strip_anno else self.movetext.strip()
+        header = "\n".join(f'[{k} "{escape_tag_value(v)}"]' for k, v in self.tags.items())
+        body = drop_malformed_commands(self.movetext)
+        body = sanitize(body) if strip_anno else body.strip()
         return f"{header}\n\n{body}\n"
+
+
+# PGN tag values escape quotes and backslashes: [ChapterName "\"Intro\" - Foreword"]
+def unescape_tag_value(value: str) -> str:
+    return re.sub(r'\\(["\\])', r"\1", value)
+
+
+def escape_tag_value(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def drop_malformed_commands(movetext: str) -> str:
+    """
+    Remove comment commands the template's PGN parser rejects (e.g. a "[%t@Shrt]"
+    typo in a study), which would otherwise make the whole chapter fail to load.
+    """
+    return COMMAND_RE.sub(
+        lambda m: m.group(0) if VALID_COMMAND_RE.fullmatch(m.group(0)) else "", movetext
+    )
 
 
 def has_moves(movetext: str) -> bool:
@@ -175,7 +198,7 @@ def split_games(text: str) -> list[Chapter]:
                 current = Chapter()
                 move_lines = []
                 in_moves = False
-            current.tags.setdefault(tag.group(1), tag.group(2).replace('\\"', '"'))
+            current.tags.setdefault(tag.group(1), unescape_tag_value(tag.group(2)))
             continue
 
         if current is None:
