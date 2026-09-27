@@ -81,6 +81,22 @@ files generated in 'dist-anki'
 - Each mode uses its own note type (`<base>`, `<base> Flipped`, `<base> Study`). Missing ones are cloned from the base note type with `flipBoard`/`playBothSides` set.
 - Re-importing skips chapters already imported (matched by chapter URL), or updates them if you choose.
 
+## Deck layout
+
+Both importers file cards under one root deck (`deck_root`, default `Chess`, or `Xadrez` in pt-BR):
+
+```
+<root>::Openings::<family>           opening lines, book moves, book lines
+                                     (tag <opening>::<family>::<variation>, e.g. opening::slav_defense::czech_variation)
+<root>::Tactics::<study>             Lichess chapters set up from a position
+<root>::Annotated games::<study>     Lichess full games (a result such as 1-0)
+<root>::My games::<error type>       Chess.com blunders, mistakes, misses, inaccuracies, missed mates
+```
+
+- Lichess chapters are classified automatically: from a `[FEN]` → tactics, unless the position is in the opening catalog; no FEN and no result (`*`) → opening line; no FEN with a result → annotated game. The type can be changed per chapter; the **Deck** column shows where each card goes.
+- Opening decks use the family of the catalog name (`Slav Defense`, `Semi-Slav Defense`...), so Lichess opening chapters and Chess.com book lines of the same opening end up together.
+- Re-importing with **Update notes already imported** also moves older notes into this layout.
+
 ## Chess.com games
 
 `Tools > Import Chess.com game...` turns one of your games into cards:

@@ -80,6 +80,7 @@ class GameCard:
     eval_text: str
     body: str
     link_label: str = "Chess.com"
+    opening: str | None = None  # catalog opening name, used to file opening cards
 
     def pgn(self, strip_anno: bool = True) -> str:
         return self.body
@@ -261,6 +262,7 @@ def _opening_card(meta: _Game, start: chess.Board, moves, opening: str | None) -
         solution_text=opening or "",
         eval_text="",
         body=_export(game, meta.headers(name, key)),
+        opening=opening,
     )
 
 
@@ -293,6 +295,7 @@ def _book_card(meta: _Game, boards, moves, nodes, book) -> GameCard:
         solution_text=", ".join(board.san(m) for m in book_moves),
         eval_text="",
         body=_export(game, meta.headers(name, key)),
+        opening=book.opening_name,
     )
 
 
@@ -349,11 +352,12 @@ def _book_line_cards(meta: _Game, boards, moves, branch_ply: int, user: chess.Co
                 study_name=meta.title,
                 chapter_url=meta.link,
                 dedupe_key=key,
-                note_tags=[*_tags(meta, KIND_BOOK_LINE), f"opening::{line.eco}"],
+                note_tags=[*_tags(meta, KIND_BOOK_LINE), f"eco::{line.eco}"],
                 move_text=line.eco,
                 solution_text=f"{line.name}: {branch.variation_san(line.moves)}",
                 eval_text="",
                 body=_export(game, meta.headers(name, key)),
+                opening=line.name,
             )
         )
     return cards

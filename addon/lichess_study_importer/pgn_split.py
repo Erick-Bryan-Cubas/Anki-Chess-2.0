@@ -42,9 +42,11 @@ COLOR_WORDS = {
     "black": "b",
 }
 
-KIND_EXERCISE = "exercise"
-KIND_GAME = "game"
+KIND_EXERCISE = "exercise"  # starts from a [FEN] position
+KIND_LINE = "line"  # from the start, no result: an opening line
+KIND_GAME = "game"  # from the start, with a result: an annotated game
 KIND_EMPTY = "empty"
+FINISHED_RESULTS = ("1-0", "0-1", "1/2-1/2")
 
 MODE_PUZZLE = "puzzle"
 MODE_FLIPPED = "flipped"
@@ -109,12 +111,14 @@ class Chapter:
     def kind(self) -> str:
         if not has_moves(self.movetext):
             return KIND_EMPTY
-        return KIND_EXERCISE if self.fen else KIND_GAME
+        if self.fen:
+            return KIND_EXERCISE
+        return KIND_GAME if self.tags.get("Result") in FINISHED_RESULTS else KIND_LINE
 
     @property
     def suggested_mode(self) -> str:
         kind = self.kind
-        if kind == KIND_GAME:
+        if kind in (KIND_GAME, KIND_LINE):
             return MODE_STUDY
         if kind == KIND_EMPTY:
             return MODE_PUZZLE
