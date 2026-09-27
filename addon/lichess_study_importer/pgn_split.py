@@ -78,6 +78,24 @@ class Chapter:
         m = CHAPTER_URL_RE.search(self.chapter_url)
         return m.group(2) if m else None
 
+    # --- Card interface used by anki_ops (shared with game_analysis.GameCard) ---
+
+    link_label = "Lichess"
+
+    @property
+    def dedupe_key(self) -> str | None:
+        """Text found in the PGN field of notes already imported from this chapter."""
+        if self.study_id and self.chapter_id:
+            return f"study/{self.study_id}/{self.chapter_id}"
+        return None
+
+    @property
+    def note_tags(self) -> list[str]:
+        tags = ["lichess", f"lichess::{self.kind}"]
+        if self.study_id:
+            tags.append(f"lichess::study::{self.study_id}")
+        return tags
+
     @property
     def fen(self) -> str | None:
         return self.tags.get("FEN")

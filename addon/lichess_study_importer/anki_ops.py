@@ -92,29 +92,28 @@ def build_note_fields(ch: Chapter, strip_anno: bool) -> tuple[str, str]:
     if ch.study_name:
         parts.append(html.escape(ch.study_name))
     if ch.chapter_url:
-        parts.append(f'<a href="{html.escape(ch.chapter_url)}">Lichess</a>')
+        parts.append(f'<a href="{html.escape(ch.chapter_url)}">{html.escape(ch.link_label)}</a>')
     return pgn_field, "<br>".join(parts)
 
 
 def _find_existing(col, ch: Chapter) -> list[int]:
-    if not (ch.study_id and ch.chapter_id):
+    if not ch.dedupe_key:
         return []
-    return list(col.find_notes(f'"PGN:*study/{ch.study_id}/{ch.chapter_id}*"'))
+    return list(col.find_notes(f'"PGN:*{ch.dedupe_key}*"'))
 
 
 def import_chapters(col, rows, deck_name: str, update_existing: bool, strip_anno: bool, stats: dict):
     """
-    rows: list of (Chapter, note type dict). Runs inside a CollectionOp; `stats`
-    is filled with created/updated/skipped counts.
+    rows: list of (card, note type dict), where a card is a pgn_split.Chapter or a
+    game_analysis.GameCard. Runs inside a CollectionOp; `stats` is filled with
+    created/updated/skipped counts.
     """
     undo_pos = col.add_custom_undo_entry(tr("undo.import"))
     deck_id = col.decks.id(deck_name)
 
     for ch, model in rows:
         pgn_field, text_field = build_note_fields(ch, strip_anno)
-        tags = ["lichess", f"lichess::{ch.kind}"]
-        if ch.study_id:
-            tags.append(f"lichess::study::{ch.study_id}")
+        tags = ch.note_tags
 
         existing = _find_existing(col, ch)
         if existing:

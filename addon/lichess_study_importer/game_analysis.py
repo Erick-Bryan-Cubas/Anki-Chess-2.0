@@ -1,0 +1,402 @@
+"""
+Turn an analysed game (Chess.com export or plain PGN) into AnkiChess cards:
+
+- opening: the book moves of the game, played on both sides (Study)
+- book: the position where you left theory; the solution is the book move
+- blunder / mistake / miss / inaccuracy: the position before your error;
+  the solution is a line you explored in the analysis board, or Stockfish's
+- missed_mate: a forced mate you did not play, with the whole mating line
+
+Pure Python (no aqt imports); the engine is passed in so tests can use any UCI engine.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import math
+from dataclasses import dataclass, field
+from typing import Callable
+
+from .chess_lib import chess
+from .chesscom import ERROR_LABELS, LABEL_NAGS, game_id_from_headers, game_link, move_label
+from .i18n import tr
+from .openings import follow_book
+from .pgn_split import MODE_FLIPPED, MODE_PUZZLE, MODE_STUDY, escape_tag_value
+
+KIND_OPENING = "opening"
+KIND_BOOK = "book"
+KIND_BLUNDER = "blunder"
+KIND_MISTAKE = "mistake"
+KIND_MISS = "miss"
+KIND_INACCURACY = "inaccuracy"
+KIND_MISSED_MATE = "missed_mate"
+ERROR_KINDS = (KIND_BLUNDER, KIND_MISTAKE, KIND_MISS, KIND_INACCURACY)
+ALL_KINDS = (KIND_OPENING, KIND_BOOK, *ERROR_KINDS, KIND_MISSED_MATE)
+ENGINE_KINDS = (*ERROR_KINDS, KIND_MISSED_MATE)
+DEFAULT_KINDS = {KIND_OPENING, KIND_BOOK, KIND_BLUNDER, KIND_MISTAKE, KIND_MISS, KIND_MISSED_MATE}
+
+KIND_NAGS = {kind: LABEL_NAGS[kind.capitalize()] for kind in ERROR_KINDS}
+BAD_NAGS = {2, 4, 5, 6, 9}
+# Lichess thresholds on the drop of the win chance, used when the PGN has no labels
+WIN_DROP_KINDS = ((30, KIND_BLUNDER), (20, KIND_MISTAKE), (10, KIND_INACCURACY))
+
+
+@dataclass
+class AnalysisOptions:
+    user_color: chess.Color
+    kinds: set[str] = field(default_factory=lambda: set(DEFAULT_KINDS))
+    move_time: float = 0.5  # scan of every user move
+    solution_time: float = 1.5  # deeper search for the positions that become cards
+    max_mate: int = 6  # longest mate turned into a "missed mate" card
+    alt_threshold: float = 3.0  # win-% points: engine moves this close to the best are also accepted
+
+
+@dataclass
+class GameCard:
+    """Card generated from a game; same interface as pgn_split.Chapter for anki_ops."""
+
+    kind: str
+    ply: int
+    mode: str
+    name: str
+    study_name: str
+    chapter_url: str
+    dedupe_key: str
+    note_tags: list[str]
+    move_text: str  # the move played in the game, e.g. "19. bxa5??"
+    solution_text: str
+    eval_text: str
+    body: str
+    link_label: str = "Chess.com"
+
+    def pgn(self, strip_anno: bool = True) -> str:
+        return self.body
+
+
+def win_percent(score: chess.engine.PovScore | chess.engine.Score) -> float:
+    """Lichess win chance (0-100) for a score seen from the side of interest."""
+    cp = score.score(mate_score=10000)
+    return 50 + 50 * (2 / (1 + math.exp(-0.00368208 * cp)) - 1)
+
+
+def format_score(score: chess.engine.Score) -> str:
+    mate = score.mate()
+    if mate is not None:
+        return f"#{mate}" if mate > 0 else f"#-{-mate}"
+    return f"{score.score() / 100:+.1f}"
+
+
+def move_number(board: chess.Board) -> str:
+    return f"{board.fullmove_number}{'.' if board.turn == chess.WHITE else '...'}"
+
+
+def _nag_suffix(nags) -> str:
+    symbols = {1: "!", 2: "?", 3: "!!", 4: "??", 5: "!?", 6: "?!"}
+    return "".join(symbols[n] for n in sorted(nags) if n in symbols)
+
+
+class _Game:
+    """Game metadata shared by all its cards."""
+
+    def __init__(self, game: chess.pgn.Game):
+        h = game.headers
+        self.white, self.black = h.get("White", "?"), h.get("Black", "?")
+        self.date = h.get("Date", "????.??.??")
+        self.game_id = game_id_from_headers(h)
+        self.link = game_link("live", self.game_id) if self.game_id else ""
+        if not self.game_id:
+            moves = " ".join(n.uci() for n in game.mainline_moves())
+            self.game_id = hashlib.sha1(moves.encode()).hexdigest()[:12]
+        self.title = f"{self.white} vs {self.black}"
+        if not self.date.startswith("?"):
+            self.title += f" · {self.date.replace('.??', '')}"
+
+    def headers(self, card_name: str, dedupe_key: str) -> dict[str, str]:
+        return {
+            "Event": "Chess.com analysis",
+            "Site": self.link or "?",
+            "Date": self.date,
+            "White": self.white,
+            "Black": self.black,
+            "Result": "*",
+            "StudyName": self.title,
+            "ChapterName": card_name,
+            "ChapterURL": self.link,
+            "AnkiChessId": dedupe_key,
+        }
+
+
+def _export(game: chess.pgn.Game, headers: dict[str, str]) -> str:
+    for key, value in headers.items():
+        game.headers[key] = value
+    exporter = chess.pgn.StringExporter(headers=False, variations=True, comments=True)
+    moves = game.accept(exporter)
+    # python-chess writes tags without escaping quotes, so write them ourselves
+    tags = "\n".join(f'[{k} "{escape_tag_value(v)}"]' for k, v in game.headers.items())
+    return f"{tags}\n\n{moves}\n"
+
+
+def _puzzle_start(board_before: chess.Board, prev_move: chess.Move | None):
+    """
+    Start one ply earlier when possible (Flipped mode): the opponent's last move is
+    played automatically, so the card shows what just happened.
+    """
+    game = chess.pgn.Game()
+    if prev_move is None:
+        game.setup(board_before)
+        return game, game, MODE_PUZZLE
+    board = board_before.copy()
+    board.pop()
+    game.setup(board)
+    return game, game.add_main_variation(prev_move), MODE_FLIPPED
+
+
+def _mate_alternatives(board: chess.Board, mate_move: chess.Move) -> list[chess.Move]:
+    """Other moves that also mate at once, so any mate is accepted (see issue #115)."""
+    others = []
+    for move in board.legal_moves:
+        if move == mate_move:
+            continue
+        board.push(move)
+        if board.is_checkmate():
+            others.append(move)
+        board.pop()
+    return others
+
+
+def _explored_alternative(node: chess.pgn.ChildNode) -> chess.Move | None:
+    """A move explored in the analysis board instead of the game move, if not marked as bad."""
+    for variation in node.parent.variations:
+        if variation is node or variation.move == node.move:
+            continue
+        if BAD_NAGS & set(variation.nags) or move_label(variation) in ERROR_LABELS:
+            continue
+        return variation.move
+    return None
+
+
+def analyze_game(
+    game: chess.pgn.Game,
+    options: AnalysisOptions,
+    engine=None,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> list[GameCard]:
+    meta = _Game(game)
+    nodes = list(game.mainline())
+    moves = [n.move for n in nodes]
+    start = game.board()
+    cards: list[GameCard] = []
+
+    book = follow_book(start, moves)
+    if KIND_OPENING in options.kinds and book.last_book_ply >= 4:
+        cards.append(_opening_card(meta, start, moves[: book.last_book_ply], book.opening_name))
+
+    boards = [start.copy()]
+    for move in moves:
+        board = boards[-1].copy()
+        board.push(move)
+        boards.append(board)
+
+    if (
+        KIND_BOOK in options.kinds
+        and book.deviation_ply is not None
+        and boards[book.deviation_ply].turn == options.user_color
+    ):
+        cards.append(_book_card(meta, boards, moves, nodes, book))
+
+    if engine is None or not options.kinds & set(ENGINE_KINDS):
+        return cards
+
+    labeled = any(move_label(n) in ERROR_LABELS for n in nodes)
+    user_plies = [
+        i for i in range(book.last_book_ply, len(moves)) if boards[i].turn == options.user_color
+    ]
+    for done, ply in enumerate(user_plies):
+        if on_progress:
+            on_progress(done, len(user_plies))
+        card = _error_card(meta, boards, moves, nodes, ply, options, engine, labeled)
+        if card:
+            cards.append(card)
+    if on_progress:
+        on_progress(len(user_plies), len(user_plies))
+    return cards
+
+
+def _opening_card(meta: _Game, start: chess.Board, moves, opening: str | None) -> GameCard:
+    name = tr("card.opening", opening=opening or "?")
+    key = f"chesscom/{meta.game_id}/0/{KIND_OPENING}"
+    game = chess.pgn.Game()
+    if start.fen() != chess.STARTING_FEN:
+        game.setup(start)
+    node = game
+    for move in moves:
+        node = node.add_main_variation(move)
+    if opening:
+        node.comment = opening
+    return GameCard(
+        kind=KIND_OPENING,
+        ply=0,
+        mode=MODE_STUDY,
+        name=name,
+        study_name=meta.title,
+        chapter_url=meta.link,
+        dedupe_key=key,
+        note_tags=_tags(meta, KIND_OPENING),
+        move_text=tr("card.opening_moves", count=len(moves)),
+        solution_text=opening or "",
+        eval_text="",
+        body=_export(game, meta.headers(name, key)),
+    )
+
+
+def _book_card(meta: _Game, boards, moves, nodes, book) -> GameCard:
+    ply = book.deviation_ply
+    board = boards[ply]
+    played = moves[ply]
+    book_moves = [chess.Move.from_uci(uci) for uci in book.book_moves]
+    game, node, mode = _puzzle_start(board, moves[ply - 1] if ply else None)
+    node.add_main_variation(
+        book_moves[0], comment=tr("card.book_comment", opening=book.opening_name or "?")
+    )
+    for alt in book_moves[1:]:
+        node.add_variation(alt)
+    node.add_variation(played, nags={6}, comment=tr("card.played_comment", move=board.san(played)))
+
+    number = move_number(board)
+    name = tr("card.book", number=number, opening=book.opening_name or "?")
+    key = f"chesscom/{meta.game_id}/{ply}/{KIND_BOOK}"
+    return GameCard(
+        kind=KIND_BOOK,
+        ply=ply,
+        mode=mode,
+        name=name,
+        study_name=meta.title,
+        chapter_url=meta.link,
+        dedupe_key=key,
+        note_tags=_tags(meta, KIND_BOOK),
+        move_text=f"{number} {board.san(played)}",
+        solution_text=", ".join(board.san(m) for m in book_moves),
+        eval_text="",
+        body=_export(game, meta.headers(name, key)),
+    )
+
+
+def _score_of(infos, move: chess.Move, color: chess.Color):
+    for info in infos:
+        pv = info.get("pv")
+        if pv and pv[0] == move:
+            return info["score"].pov(color)
+    return None
+
+
+def _error_card(meta: _Game, boards, moves, nodes, ply, options, engine, labeled) -> GameCard | None:
+    board = boards[ply]
+    played = moves[ply]
+    user = options.user_color
+    label = move_label(nodes[ply])
+
+    scan = engine.analyse(board, chess.engine.Limit(time=options.move_time), multipv=3)
+    best_score = scan[0]["score"].pov(user)
+    best_mate = best_score.mate()
+    mate_chance = best_mate is not None and 0 < best_mate <= options.max_mate
+    if labeled and label not in ERROR_LABELS and not mate_chance:
+        return None
+
+    played_score = _score_of(scan, played, user)
+    if played_score is None:
+        info = engine.analyse(board, chess.engine.Limit(time=options.move_time), root_moves=[played])
+        played_score = info["score"].pov(user)
+
+    played_mate = played_score.mate()
+    if mate_chance and not (played_mate is not None and played_mate > 0):
+        kind = KIND_MISSED_MATE
+    elif labeled:
+        kind = label.lower() if label in ERROR_LABELS else None
+    else:
+        drop = win_percent(best_score) - win_percent(played_score)
+        kind = next((k for threshold, k in WIN_DROP_KINDS if drop >= threshold), None)
+    if kind not in options.kinds:
+        return None
+
+    deep = engine.analyse(board, chess.engine.Limit(time=options.solution_time), multipv=3)
+    deep_best = deep[0]
+    deep_score = deep_best["score"].pov(user)
+    explored = _explored_alternative(nodes[ply]) if kind != KIND_MISSED_MATE else None
+
+    if kind == KIND_MISSED_MATE:
+        line = _mate_line(board, deep_best, options, engine)
+    else:
+        line = [explored or deep_best["pv"][0]]
+
+    alternatives = []
+    for info in deep:
+        move = info["pv"][0]
+        if move in line[:1] or move == played:
+            continue
+        close = win_percent(deep_score) - win_percent(info["score"].pov(user)) <= options.alt_threshold
+        if close or move == deep_best["pv"][0]:
+            alternatives.append(move)
+
+    number = move_number(board)
+    played_san = board.san(played)
+    # The game move stays in the card marked as bad: repeating it fails the puzzle
+    nags = {KIND_NAGS[kind]} if kind in KIND_NAGS else {LABEL_NAGS.get(label, 2)}
+    game, node, mode = _puzzle_start(board, moves[ply - 1] if ply else None)
+    solution_comment = tr(
+        "card.solution_comment", move=board.san(line[0]), score=format_score(deep_score)
+    )
+    sol = node.add_main_variation(line[0], comment=solution_comment)
+    for alt in alternatives:
+        node.add_variation(alt)
+    node.add_variation(
+        played,
+        nags=nags,
+        comment=tr("card.played_comment_eval", move=played_san, score=format_score(played_score)),
+    )
+    cur = sol
+    for move in line[1:]:
+        cur = cur.add_main_variation(move)
+    if kind == KIND_MISSED_MATE and len(line) > 1:
+        last_board = cur.parent.board()
+        for alt in _mate_alternatives(last_board, cur.move):
+            cur.parent.add_variation(alt)
+
+    if kind == KIND_MISSED_MATE:
+        name = tr("card.missed_mate", number=number, mate=deep_score.mate() or best_mate)
+    else:
+        name = tr("card.error", number=number, move=played_san + _nag_suffix(nags), label=tr(f"kind.{kind}"))
+    key = f"chesscom/{meta.game_id}/{ply}/{kind}"
+    return GameCard(
+        kind=kind,
+        ply=ply,
+        mode=mode,
+        name=name,
+        study_name=meta.title,
+        chapter_url=meta.link,
+        dedupe_key=key,
+        note_tags=_tags(meta, kind),
+        move_text=f"{number} {played_san}{_nag_suffix(nags)}",
+        solution_text=board.variation_san(line) if len(line) > 1 else board.san(line[0]),
+        eval_text=f"{format_score(played_score)} → {format_score(deep_score)}",
+        body=_export(game, meta.headers(name, key)),
+    )
+
+
+def _mate_line(board: chess.Board, info, options, engine) -> list[chess.Move]:
+    """Engine mating line; searched again for the exact mate if the PV was cut short."""
+    for candidate in (info, None):
+        if candidate is None:
+            mate = info["score"].pov(board.turn).mate() or options.max_mate
+            candidate = engine.analyse(board, chess.engine.Limit(mate=mate, time=options.solution_time * 3))
+        pv = candidate.get("pv") or []
+        test = board.copy()
+        for move in pv:
+            test.push(move)
+        if pv and test.is_checkmate():
+            return list(pv)
+    return list(info["pv"][:1])
+
+
+def _tags(meta: _Game, kind: str) -> list[str]:
+    return ["chesscom", f"chesscom::{kind}", f"chesscom::game::{meta.game_id}"]
+
