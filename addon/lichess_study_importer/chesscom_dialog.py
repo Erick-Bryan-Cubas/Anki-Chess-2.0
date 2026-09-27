@@ -31,13 +31,13 @@ from aqt.qt import (
 )
 from aqt.utils import askUser, showWarning, tooltip
 
-from . import anki_ops, chesscom, engine
+from . import anki_ops, chesscom, decks, engine
 from .chess_lib import chess
 from .dialog import apply_language, get_config, write_config
 from .game_analysis import ALL_KINDS, DEFAULT_KINDS, ENGINE_KINDS, AnalysisOptions, analyze_game
 from .i18n import tr
 
-COL_CHECK, COL_MOVE, COL_KIND, COL_SOLUTION, COL_EVAL = range(5)
+COL_CHECK, COL_MOVE, COL_KIND, COL_SOLUTION, COL_EVAL, COL_DECK = range(6)
 
 
 def error_text(e: Exception) -> str:
@@ -137,14 +137,22 @@ class ChessComImportDialog(QDialog):
         layout.addLayout(opts)
 
         # --- Cards ---
-        self.table = QTableWidget(0, 5)
+        self.table = QTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels(
-            ["", tr("cc.table.move"), tr("table.kind"), tr("cc.table.solution"), tr("cc.table.eval")]
+            [
+                "",
+                tr("cc.table.move"),
+                tr("table.kind"),
+                tr("cc.table.solution"),
+                tr("cc.table.eval"),
+                tr("table.deck"),
+            ]
         )
         header = self.table.horizontalHeader()
         for col in (COL_CHECK, COL_MOVE, COL_KIND, COL_EVAL):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(COL_SOLUTION, QHeaderView.ResizeMode.Stretch)
+        for col in (COL_SOLUTION, COL_DECK):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
         layout.addWidget(self.table, 1)
 
@@ -157,8 +165,10 @@ class ChessComImportDialog(QDialog):
         if idx >= 0:
             self.model_combo.setCurrentIndex(idx)
         form.addRow(tr("form.base_note_type"), self.model_combo)
-        self.deck_edit = QLineEdit(self.config.get("chesscom_deck", "Chess.com"))
-        form.addRow(tr("form.deck"), self.deck_edit)
+        self.root_edit = QLineEdit(decks.root_name(self.config.get("deck_root")))
+        self.root_edit.setToolTip(tr("form.deck_root_tip"))
+        self.root_edit.textChanged.connect(self.refresh_decks)
+        form.addRow(tr("form.deck_root"), self.root_edit)
         self.update_existing = QCheckBox(tr("form.update_existing"))
         self.update_existing.setChecked(bool(self.config.get("update_existing", False)))
         form.addRow("", self.update_existing)
@@ -342,14 +352,26 @@ class ChessComImportDialog(QDialog):
                 (COL_KIND, tr(f"kind.{card.kind}")),
                 (COL_SOLUTION, card.solution_text),
                 (COL_EVAL, card.eval_text),
+                (COL_DECK, ""),
             ):
                 item = QTableWidgetItem(value)
                 item.setFlags(Qt.ItemFlag.ItemIsEnabled)
                 item.setToolTip(card.name)
                 self.table.setItem(row, col, item)
+        self.refresh_decks()
         self.import_btn.setEnabled(bool(self.cards) and self.model_combo.count() > 0)
         if not self.cards:
             tooltip(tr("cc.no_cards"), parent=self)
+
+    def placement(self, card) -> decks.Placement:
+        return decks.place_game_card(card, decks.root_name(self.root_edit.text()))
+
+    def refresh_decks(self):
+        for row, card in enumerate(self.cards):
+            placement = self.placement(card)
+            item = self.table.item(row, COL_DECK)
+            item.setText(placement.deck)
+            item.setToolTip("\n".join([placement.deck, *placement.tags]))
 
     # --- Import ---
 
@@ -362,10 +384,6 @@ class ChessComImportDialog(QDialog):
         if not selected:
             showWarning(tr("warn.no_selection"), parent=self)
             return
-        deck_name = self.deck_edit.text().strip()
-        if not deck_name:
-            showWarning(tr("warn.no_deck"), parent=self)
-            return
         base = mw.col.models.get(self.model_combo.currentData())
         if not base:
             showWarning(tr("warn.base_missing"), parent=self)
@@ -375,7 +393,7 @@ class ChessComImportDialog(QDialog):
         except anki_ops.ChessImportError as e:
             showWarning(str(e), parent=self)
             return
-        rows = [(card, models[card.mode]) for card in selected]
+        rows = [(card, models[card.mode], self.placement(card)) for card in selected]
 
         side = self.side_combo.currentData()
         username = self.game.headers.get("White" if side == chess.WHITE else "Black", "")
@@ -384,7 +402,7 @@ class ChessComImportDialog(QDialog):
         self.config.update(
             {
                 "chesscom_usernames": [u for u in usernames if u and u != "?"],
-                "chesscom_deck": deck_name,
+                "deck_root": self.root_edit.text().strip(),
                 "chesscom_kinds": sorted(self.selected_kinds()),
                 "analysis_time": self.time_spin.value(),
                 "base_note_type": base["name"],
@@ -402,7 +420,7 @@ class ChessComImportDialog(QDialog):
         CollectionOp(
             parent=self,
             op=lambda col: anki_ops.import_chapters(
-                col, rows, deck_name, update_existing, False, stats, tr("cc.undo")
+                col, rows, update_existing, False, stats, tr("cc.undo")
             ),
         ).success(on_success).run_in_background()
 

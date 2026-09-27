@@ -73,7 +73,14 @@ def test_tag_like_line_inside_comment_does_not_split():
 
 def test_crlf_and_single_game_without_tags():
     chs = p.split_games("1. e4 e5 2. Nf3 *\r\n")
-    assert len(chs) == 1 and chs[0].kind == p.KIND_GAME
+    assert len(chs) == 1 and chs[0].kind == p.KIND_LINE  # no result: an opening line
+
+
+def test_game_vs_line():
+    game = p.split_games('[Result "1-0"]\n\n1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0\n')[0]
+    line = p.split_games('[Result "*"]\n\n1. e4 c5 2. Nf3 a6 *\n')[0]
+    assert game.kind == p.KIND_GAME and line.kind == p.KIND_LINE
+    assert line.suggested_mode == p.MODE_STUDY
 
 
 def test_quotes_in_tag_values_are_kept_escaped():

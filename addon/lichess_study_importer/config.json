@@ -1,12 +1,11 @@
 {
   "language": "en",
-  "deck_prefix": "Lichess",
+  "deck_root": "",
   "include_games": false,
   "update_existing": false,
   "strip_anno": true,
   "base_note_type": "",
   "lichess_token": "",
-  "chesscom_deck": "Chess.com",
   "chesscom_usernames": [],
   "chesscom_kinds": [],
   "analysis_time": 0.5,

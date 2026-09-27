@@ -28,13 +28,14 @@ from aqt.qt import (
 )
 from aqt.utils import showWarning, tooltip
 
-from . import anki_ops
+from . import anki_ops, decks
 from .i18n import resolve_language, set_language, tr
 from .lichess_api import LichessError, fetch_study_pgn, parse_study_url
 from .pgn_split import (
     KIND_EMPTY,
     KIND_EXERCISE,
     KIND_GAME,
+    KIND_LINE,
     MODE_FLIPPED,
     MODE_PUZZLE,
     MODE_STUDY,
@@ -42,9 +43,15 @@ from .pgn_split import (
     split_games,
 )
 
-KIND_KEYS = {KIND_EXERCISE: "kind.exercise", KIND_GAME: "kind.game", KIND_EMPTY: "kind.empty"}
+KIND_KEYS = {
+    KIND_EXERCISE: "kind.exercise",
+    KIND_LINE: "kind.line",
+    KIND_GAME: "kind.game",
+    KIND_EMPTY: "kind.empty",
+}
+CHAPTER_KINDS = (KIND_EXERCISE, KIND_LINE, KIND_GAME)  # the kind decides the deck
 MODES = [(MODE_PUZZLE, "mode.puzzle"), (MODE_FLIPPED, "mode.flipped"), (MODE_STUDY, "mode.study")]
-COL_CHECK, COL_NAME, COL_KIND, COL_MODE, COL_PREVIEW = range(5)
+COL_CHECK, COL_NAME, COL_KIND, COL_MODE, COL_DECK, COL_PREVIEW = range(6)
 
 
 def lichess_error_text(e: LichessError) -> str:
@@ -75,6 +82,8 @@ class StudyImportDialog(QDialog):
         self.resize(900, 620)
         self.config = get_config()
         self.chapters: list[Chapter] = []
+        self.kinds: list[str] = []
+        self._openings: dict[int, str | None] = {}  # row -> catalog opening name
 
         layout = QVBoxLayout(self)
 
@@ -111,7 +120,7 @@ class StudyImportDialog(QDialog):
         self.include_games.setChecked(bool(self.config.get("include_games", False)))
         self.include_games.toggled.connect(self.on_toggle_games)
         btn_all = QPushButton(tr("filter.check_exercises"))
-        btn_all.clicked.connect(lambda: self.set_checked(KIND_EXERCISE, True))
+        btn_all.clicked.connect(self.check_exercises_and_lines)
         btn_none = QPushButton(tr("filter.uncheck_all"))
         btn_none.clicked.connect(self.uncheck_all)
         filters.addWidget(self.include_games)
@@ -120,16 +129,22 @@ class StudyImportDialog(QDialog):
         filters.addWidget(btn_none)
         layout.addLayout(filters)
 
-        self.table = QTableWidget(0, 5)
+        self.table = QTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels(
-            ["", tr("table.chapter"), tr("table.kind"), tr("table.mode"), tr("table.moves")]
+            [
+                "",
+                tr("table.chapter"),
+                tr("table.kind"),
+                tr("table.mode"),
+                tr("table.deck"),
+                tr("table.moves"),
+            ]
         )
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(COL_CHECK, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(COL_NAME, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(COL_KIND, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(COL_MODE, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(COL_PREVIEW, QHeaderView.ResizeMode.Stretch)
+        for col in (COL_CHECK, COL_KIND, COL_MODE):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
+        for col in (COL_NAME, COL_DECK, COL_PREVIEW):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
         layout.addWidget(self.table, 1)
 
@@ -148,8 +163,10 @@ class StudyImportDialog(QDialog):
             self.model_combo.setCurrentIndex(idx)
         form.addRow(tr("form.base_note_type"), self.model_combo)
 
-        self.deck_edit = QLineEdit()
-        form.addRow(tr("form.deck"), self.deck_edit)
+        self.root_edit = QLineEdit(decks.root_name(self.config.get("deck_root")))
+        self.root_edit.setToolTip(tr("form.deck_root_tip"))
+        self.root_edit.textChanged.connect(self.refresh_decks)
+        form.addRow(tr("form.deck_root"), self.root_edit)
 
         self.update_existing = QCheckBox(tr("form.update_existing"))
         self.update_existing.setChecked(bool(self.config.get("update_existing", False)))
@@ -215,43 +232,45 @@ class StudyImportDialog(QDialog):
 
     def load_pgn(self, text: str, source: str):
         self.chapters = split_games(text)
+        # Suggested kinds: exercises starting from a book position are opening lines
+        self.kinds = [decks.suggest_kind(ch) for ch in self.chapters]
         if not self.chapters:
             showWarning(tr("warn.no_chapters"), parent=self)
             return
 
         study = next((c.study_name for c in self.chapters if c.study_name), "") or source
-        counts = {k: sum(c.kind == k for c in self.chapters) for k in KIND_KEYS}
+        counts = {k: self.kinds.count(k) for k in KIND_KEYS}
         self.study_label.setText(
             tr(
                 "study.summary",
                 study=study,
                 total=len(self.chapters),
                 exercises=counts[KIND_EXERCISE],
+                lines=counts[KIND_LINE],
                 games=counts[KIND_GAME],
                 empty=counts[KIND_EMPTY],
             )
         )
-        prefix = self.config.get("deck_prefix", "Lichess").strip(":")
-        self.deck_edit.setText(f"{prefix}::{study}" if prefix else study)
+        self._openings = {}
         self.populate_table()
 
     def populate_table(self):
         self.table.setRowCount(len(self.chapters))
         include_games = self.include_games.isChecked()
         for row, ch in enumerate(self.chapters):
-            kind = ch.kind
+            kind = self.kinds[row]
             check = QTableWidgetItem()
             flags = Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled
             if kind == KIND_EMPTY:
                 flags = Qt.ItemFlag.NoItemFlags
             check.setFlags(flags)
-            checked = kind == KIND_EXERCISE or (kind == KIND_GAME and include_games)
+            checked = kind in (KIND_EXERCISE, KIND_LINE) or (kind == KIND_GAME and include_games)
             check.setCheckState(Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
             self.table.setItem(row, COL_CHECK, check)
 
             for col, value in (
                 (COL_NAME, ch.name),
-                (COL_KIND, tr(KIND_KEYS[kind])),
+                (COL_DECK, ""),
                 (COL_PREVIEW, ch.preview),
             ):
                 item = QTableWidgetItem(value)
@@ -260,38 +279,86 @@ class StudyImportDialog(QDialog):
                     item.setToolTip(ch.chapter_url)
                 self.table.setItem(row, col, item)
 
+            if kind == KIND_EMPTY:
+                item = QTableWidgetItem(tr(KIND_KEYS[kind]))
+                item.setFlags(Qt.ItemFlag.NoItemFlags)
+                self.table.setItem(row, COL_KIND, item)
+            else:
+                kind_combo = QComboBox()
+                for key in CHAPTER_KINDS:
+                    kind_combo.addItem(tr(KIND_KEYS[key]), key)
+                kind_combo.setCurrentIndex(CHAPTER_KINDS.index(kind))
+                kind_combo.currentIndexChanged.connect(lambda _, r=row: self.refresh_deck(r))
+                self.table.setCellWidget(row, COL_KIND, kind_combo)
+
             combo = QComboBox()
             for key, label_key in MODES:
                 combo.addItem(tr(label_key), key)
-            combo.setCurrentIndex([k for k, _ in MODES].index(ch.suggested_mode))
+            mode = ch.suggested_mode if kind == ch.kind else MODE_STUDY
+            combo.setCurrentIndex([k for k, _ in MODES].index(mode))
             combo.setEnabled(kind != KIND_EMPTY)
             self.table.setCellWidget(row, COL_MODE, combo)
 
+        self.refresh_decks()
         self.import_btn.setEnabled(self.model_combo.count() > 0)
+
+    # --- Decks ---
+
+    def row_kind(self, row: int) -> str:
+        combo = self.table.cellWidget(row, COL_KIND)
+        return combo.currentData() if combo else KIND_EMPTY
+
+    def placement(self, row: int) -> decks.Placement:
+        kind = self.row_kind(row)
+        if kind == KIND_LINE and row not in self._openings:
+            self._openings[row] = decks.chapter_opening(self.chapters[row])
+        return decks.place_chapter(
+            self.chapters[row],
+            decks.root_name(self.root_edit.text()),
+            kind=kind,
+            opening=self._openings.get(row),
+        )
+
+    def refresh_deck(self, row: int):
+        if self.row_kind(row) == KIND_EMPTY:
+            return
+        placement = self.placement(row)
+        item = self.table.item(row, COL_DECK)
+        item.setText(placement.deck)
+        item.setToolTip("\n".join([placement.deck, *placement.tags]))
+
+    def refresh_decks(self):
+        for row in range(len(self.chapters)):
+            self.refresh_deck(row)
 
     # --- Selection helpers ---
 
     def set_checked(self, kind: str, value: bool):
-        for row, ch in enumerate(self.chapters):
-            if ch.kind == kind:
+        for row in range(len(self.chapters)):
+            if self.row_kind(row) == kind:
                 state = Qt.CheckState.Checked if value else Qt.CheckState.Unchecked
                 self.table.item(row, COL_CHECK).setCheckState(state)
 
+    def check_exercises_and_lines(self):
+        for kind in (KIND_EXERCISE, KIND_LINE):
+            self.set_checked(kind, True)
+
     def uncheck_all(self):
-        for kind in (KIND_EXERCISE, KIND_GAME):
+        for kind in CHAPTER_KINDS:
             self.set_checked(kind, False)
 
     def on_toggle_games(self, checked: bool):
         self.set_checked(KIND_GAME, checked)
 
-    def selected_rows(self) -> list[tuple[Chapter, str]]:
+    def selected_rows(self) -> list[tuple[Chapter, str, decks.Placement]]:
         rows = []
         for row, ch in enumerate(self.chapters):
-            if ch.kind == KIND_EMPTY:
+            if self.row_kind(row) == KIND_EMPTY:
                 continue
             if self.table.item(row, COL_CHECK).checkState() != Qt.CheckState.Checked:
                 continue
-            rows.append((ch, self.table.cellWidget(row, COL_MODE).currentData()))
+            mode = self.table.cellWidget(row, COL_MODE).currentData()
+            rows.append((ch, mode, self.placement(row)))
         return rows
 
     # --- Import ---
@@ -300,10 +367,6 @@ class StudyImportDialog(QDialog):
         selected = self.selected_rows()
         if not selected:
             showWarning(tr("warn.no_selection"), parent=self)
-            return
-        deck_name = self.deck_edit.text().strip()
-        if not deck_name:
-            showWarning(tr("warn.no_deck"), parent=self)
             return
         base = mw.col.models.get(self.model_combo.currentData())
         if not base:
@@ -314,12 +377,12 @@ class StudyImportDialog(QDialog):
         try:
             models = {
                 mode: anki_ops.ensure_mode_note_type(base, mode)
-                for mode in {mode for _, mode in selected}
+                for mode in {mode for _, mode, _ in selected}
             }
         except anki_ops.ChessImportError as e:
             showWarning(str(e), parent=self)
             return
-        rows = [(ch, models[mode]) for ch, mode in selected]
+        rows = [(ch, models[mode], placement) for ch, mode, placement in selected]
 
         update_existing = self.update_existing.isChecked()
         strip_anno = bool(self.config.get("strip_anno", True))
@@ -331,6 +394,7 @@ class StudyImportDialog(QDialog):
                 "update_existing": update_existing,
                 "base_note_type": base["name"],
                 "lichess_token": self.token_edit.text().strip(),
+                "deck_root": self.root_edit.text().strip(),
             }
         )
         write_config(self.config)
@@ -342,7 +406,7 @@ class StudyImportDialog(QDialog):
         CollectionOp(
             parent=self,
             op=lambda col: anki_ops.import_chapters(
-                col, rows, deck_name, update_existing, strip_anno, stats
+                col, rows, update_existing, strip_anno, stats
             ),
         ).success(on_success).run_in_background()
 

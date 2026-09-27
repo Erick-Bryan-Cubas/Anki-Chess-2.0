@@ -104,20 +104,29 @@ def _find_existing(col, ch: Chapter) -> list[int]:
 
 
 def import_chapters(
-    col, rows, deck_name: str, update_existing: bool, strip_anno: bool, stats: dict, undo_label: str = ""
+    col, rows, update_existing: bool, strip_anno: bool, stats: dict, undo_label: str = ""
 ):
     """
-    rows: list of (card, note type dict), where a card is a pgn_split.Chapter or a
-    game_analysis.GameCard. Runs inside a CollectionOp; `stats` is filled with
-    created/updated/skipped counts.
+    rows: list of (card, note type dict, decks.Placement), where a card is a
+    pgn_split.Chapter or a game_analysis.GameCard. Runs inside a CollectionOp;
+    `stats` is filled with created/updated/skipped counts.
+
+    Updating also moves the note's cards to the card's deck, so re-importing with
+    "update" reorganises older imports into the current deck layout.
     """
     undo_pos = col.add_custom_undo_entry(undo_label or tr("undo.import"))
-    deck_id = col.decks.id(deck_name)
+    deck_ids: dict[str, int] = {}
+
+    def deck_id(name: str) -> int:
+        if name not in deck_ids:
+            deck_ids[name] = col.decks.id(name)
+        return deck_ids[name]
 
     to_add, to_update = [], []
-    for ch, model in rows:
+    moves: dict[int, list[int]] = {}  # deck id -> card ids
+    for ch, model, placement in rows:
         pgn_field, text_field = build_note_fields(ch, strip_anno)
-        tags = ch.note_tags
+        tags = [*ch.note_tags, *placement.tags]
 
         existing = _find_existing(col, ch)
         if existing:
@@ -132,6 +141,7 @@ def import_chapters(
                 for t in tags:
                     note.add_tag(t)
                 to_update.append(note)
+                moves.setdefault(deck_id(placement.deck), []).extend(note.card_ids())
             stats["updated"] += 1
             continue
 
@@ -140,13 +150,15 @@ def import_chapters(
         if len(note.fields) > 1:
             note.fields[1] = text_field
         note.tags = tags
-        to_add.append(AddNoteRequest(note=note, deck_id=deck_id))
+        to_add.append(AddNoteRequest(note=note, deck_id=deck_id(placement.deck)))
         stats["created"] += 1
 
     # Batched, so the import is a few undo steps: one per note would push the
     # custom entry out of Anki's undo queue on large imports
     if to_update:
         col.update_notes(to_update)
+        for did, card_ids in moves.items():
+            col.set_deck(card_ids, did)
     if to_add:
         col.add_notes(to_add)
     return col.merge_undo_entries(undo_pos)
