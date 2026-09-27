@@ -5,3 +5,11 @@
 - **strip_anno**: remove the `[%anno ...]` markers Lichess leaves in comments.
 - **base_note_type**: last base note type used (Flipped/Study note types are cloned from it).
 - **lichess_token**: personal token (`study:read` scope) to download private studies. Stored as plain text.
+
+**Chess.com games** (`Tools > Import Chess.com game...`):
+
+- **chesscom_deck**: deck for the generated cards.
+- **chesscom_usernames**: your usernames; used to pick your side automatically.
+- **chesscom_kinds**: card types selected last time (empty = default selection).
+- **analysis_time**: Stockfish seconds per move (the positions that become cards get 3x more).
+- **stockfish_path**: Stockfish executable. Empty = the one downloaded by the add-on (`user_files/stockfish`) or `stockfish` on the PATH.

@@ -81,6 +81,22 @@ files generated in 'dist-anki'
 - Each mode uses its own note type (`<base>`, `<base> Flipped`, `<base> Study`). Missing ones are cloned from the base note type with `flipBoard`/`playBothSides` set.
 - Re-importing skips chapters already imported (matched by chapter URL), or updates them if you choose.
 
+## Chess.com games
+
+`Tools > Import Chess.com game...` turns one of your games into cards:
+
+| Card | When | Mode |
+|---|---|---|
+| Opening | The game's book moves (Lichess opening catalog, bundled offline) | Study |
+| Book move | You left theory while the catalog had a continuation; any book move is accepted | Flipped |
+| Blunder / Mistake / Miss / Inaccuracy | Position before your error; the solution is a move you explored in the analysis board, otherwise Stockfish's best move (close alternatives are also accepted) | Flipped |
+| Missed mate | You had a forced mate and did not play it; the whole mating line, any final mate accepted | Flipped |
+
+- Source: the PGN exported from the Chess.com analysis board (`Share > PGN`) keeps the **Game Review** labels, which decide which moves become cards. A game link also works (public API), but then errors are classified by Stockfish (Lichess thresholds on the drop of the win chance).
+- Your game move stays in the card marked as bad (`$4`, `$2`...), so repeating it fails the puzzle and shows its evaluation.
+- Stockfish is downloaded on first use into `user_files/stockfish` (official release, ~80 MB), or set `stockfish_path`.
+- Bundled: [python-chess](https://github.com/niklasf/python-chess) (GPL-3.0) in `vendor/`, and the [Lichess opening catalog](https://github.com/lichess-org/chess-openings) (CC0) in `data/openings/`.
+
 ```bash
 npm run test:addon    # unit tests (pytest)
 npm run build:addon   # dist-anki/lichess_study_importer.ankiaddon
