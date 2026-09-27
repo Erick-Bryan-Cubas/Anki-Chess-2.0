@@ -23,7 +23,10 @@ from .chess_lib import chess
 ADDON_DIR = os.path.dirname(__file__)
 # Anki keeps user_files when the add-on is updated
 ENGINE_DIR = os.path.join(ADDON_DIR, "user_files", "stockfish")
-RELEASE_URL = "https://github.com/official-stockfish/Stockfish/releases/latest/download/{asset}"
+# Pinned native release, so analyses stay reproducible. Independent from the template's
+# npm package: cards run the pure-JS (asm) build, as Anki's media CSP blocks WASM.
+STOCKFISH_RELEASE = "sf_19"
+RELEASE_URL = f"https://github.com/official-stockfish/Stockfish/releases/download/{STOCKFISH_RELEASE}/{{asset}}"
 USER_AGENT = "AnkiChess-StudyImporter"
 
 
