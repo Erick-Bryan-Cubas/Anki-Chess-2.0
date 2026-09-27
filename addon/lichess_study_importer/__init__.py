@@ -7,6 +7,7 @@ from analysed Chess.com games.
 from aqt import gui_hooks, mw
 from aqt.qt import QAction
 
+from .anki_ops import fix_pgn_line_breaks, show_pgn_line_breaks
 from .chesscom_dialog import show_chesscom_dialog
 from .dialog import apply_language, show_import_dialog
 from .i18n import tr
@@ -41,3 +42,9 @@ def setup_menu():
 
 # Runs after all add-ons are loaded, so the Companion menu already exists
 gui_hooks.main_window_did_init.append(setup_menu)
+
+# PGNs pasted in the editor with wrapped lines: shown with their line breaks right
+# away, and fixed in the collection before syncing so AnkiDroid reads them too
+gui_hooks.card_will_show.append(show_pgn_line_breaks)
+gui_hooks.profile_did_open.append(lambda: fix_pgn_line_breaks(mw.col))
+gui_hooks.sync_will_start.append(lambda: fix_pgn_line_breaks(mw.col))

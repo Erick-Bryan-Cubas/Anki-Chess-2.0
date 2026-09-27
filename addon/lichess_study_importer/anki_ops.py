@@ -12,6 +12,7 @@ from anki.collection import AddNoteRequest
 from aqt import mw
 
 from .i18n import tr
+from .pgn_field import GLUED_BREAK_SEARCH, has_glued_breaks, show_line_breaks, space_line_breaks
 from .pgn_split import MODE_FLIPPED, MODE_PUZZLE, MODE_STUDY, Chapter
 
 # Same markers used by the AnkiChess Companion add-on
@@ -41,6 +42,29 @@ def is_chess_note_type(m: dict) -> bool:
 
 def find_chess_note_types() -> list[dict]:
     return [m for m in mw.col.models.all() if is_chess_note_type(m)]
+
+
+def show_pgn_line_breaks(text: str, card, kind: str) -> str:
+    """card_will_show: PGNs pasted in the editor read correctly before being fixed."""
+    note = card.note()
+    if "PGN" not in note or not has_glued_breaks(note["PGN"]):
+        return text
+    if not is_chess_note_type(note.note_type()):
+        return text
+    return show_line_breaks(text, note["PGN"])
+
+
+def fix_pgn_line_breaks(col) -> int:
+    """Space the line breaks of PGNs pasted in the editor, so every device reads them."""
+    notes = []
+    for nid in col.find_notes(GLUED_BREAK_SEARCH):
+        note = col.get_note(nid)
+        if is_chess_note_type(note.note_type()):
+            note["PGN"] = space_line_breaks(note["PGN"])
+            notes.append(note)
+    if notes:
+        col.update_notes(notes)
+    return len(notes)
 
 
 def mode_note_type_name(base_name: str, mode: str) -> str:
