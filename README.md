@@ -80,6 +80,7 @@ files generated in 'dist-anki'
   - **Study**: you play both sides. Used for full games, which are optional and unchecked by default.
 - Each mode uses its own note type (`<base>`, `<base> Flipped`, `<base> Study`). Missing ones are cloned from the base note type with `flipBoard`/`playBothSides` set.
 - Re-importing skips chapters already imported (matched by chapter URL), or updates them if you choose.
+- PGNs pasted in the editor with wrapped lines (Chess.com exports) are fixed without touching the note template: `{{text:PGN}}` drops `<br>` without a space, gluing moves and comments together (`Qg3<br>b5` → `Qg3b5`). The add-on shows those cards with their line breaks, and adds a space before each line break of the `PGN` field when the profile opens and before every sync, so AnkiDroid reads them too.
 
 ## Deck layout
 
