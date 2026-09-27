@@ -8,6 +8,7 @@ import html
 import json
 import re
 
+from anki.collection import AddNoteRequest
 from aqt import mw
 
 from .i18n import tr
@@ -102,15 +103,18 @@ def _find_existing(col, ch: Chapter) -> list[int]:
     return list(col.find_notes(f'"PGN:*{ch.dedupe_key}*"'))
 
 
-def import_chapters(col, rows, deck_name: str, update_existing: bool, strip_anno: bool, stats: dict):
+def import_chapters(
+    col, rows, deck_name: str, update_existing: bool, strip_anno: bool, stats: dict, undo_label: str = ""
+):
     """
     rows: list of (card, note type dict), where a card is a pgn_split.Chapter or a
     game_analysis.GameCard. Runs inside a CollectionOp; `stats` is filled with
     created/updated/skipped counts.
     """
-    undo_pos = col.add_custom_undo_entry(tr("undo.import"))
+    undo_pos = col.add_custom_undo_entry(undo_label or tr("undo.import"))
     deck_id = col.decks.id(deck_name)
 
+    to_add, to_update = [], []
     for ch, model in rows:
         pgn_field, text_field = build_note_fields(ch, strip_anno)
         tags = ch.note_tags
@@ -127,7 +131,7 @@ def import_chapters(col, rows, deck_name: str, update_existing: bool, strip_anno
                     note.fields[1] = text_field
                 for t in tags:
                     note.add_tag(t)
-                col.update_note(note)
+                to_update.append(note)
             stats["updated"] += 1
             continue
 
@@ -136,7 +140,13 @@ def import_chapters(col, rows, deck_name: str, update_existing: bool, strip_anno
         if len(note.fields) > 1:
             note.fields[1] = text_field
         note.tags = tags
-        col.add_note(note, deck_id)
+        to_add.append(AddNoteRequest(note=note, deck_id=deck_id))
         stats["created"] += 1
 
+    # Batched, so the import is a few undo steps: one per note would push the
+    # custom entry out of Anki's undo queue on large imports
+    if to_update:
+        col.update_notes(to_update)
+    if to_add:
+        col.add_notes(to_add)
     return col.merge_undo_entries(undo_pos)

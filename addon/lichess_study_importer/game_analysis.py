@@ -3,6 +3,8 @@ Turn an analysed game (Chess.com export or plain PGN) into AnkiChess cards:
 
 - opening: the book moves of the game, played on both sides (Study)
 - book: the position where you left theory; the solution is the book move
+- book_line: every named catalog line from where the game left theory, to
+  memorise the line's moves on your side (the line name is the prompt)
 - blunder / mistake / miss / inaccuracy: the position before your error;
   the solution is a line you explored in the analysis board, or Stockfish's
 - missed_mate: a forced mate you did not play, with the whole mating line
@@ -14,26 +16,36 @@ from __future__ import annotations
 
 import hashlib
 import math
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Callable
 
 from .chess_lib import chess
 from .chesscom import ERROR_LABELS, LABEL_NAGS, game_id_from_headers, game_link, move_label
 from .i18n import tr
-from .openings import follow_book
+from .openings import follow_book, lines_from, load_book
 from .pgn_split import MODE_FLIPPED, MODE_PUZZLE, MODE_STUDY, escape_tag_value
 
 KIND_OPENING = "opening"
 KIND_BOOK = "book"
+KIND_BOOK_LINE = "book_line"
 KIND_BLUNDER = "blunder"
 KIND_MISTAKE = "mistake"
 KIND_MISS = "miss"
 KIND_INACCURACY = "inaccuracy"
 KIND_MISSED_MATE = "missed_mate"
 ERROR_KINDS = (KIND_BLUNDER, KIND_MISTAKE, KIND_MISS, KIND_INACCURACY)
-ALL_KINDS = (KIND_OPENING, KIND_BOOK, *ERROR_KINDS, KIND_MISSED_MATE)
+ALL_KINDS = (KIND_OPENING, KIND_BOOK, KIND_BOOK_LINE, *ERROR_KINDS, KIND_MISSED_MATE)
 ENGINE_KINDS = (*ERROR_KINDS, KIND_MISSED_MATE)
-DEFAULT_KINDS = {KIND_OPENING, KIND_BOOK, KIND_BLUNDER, KIND_MISTAKE, KIND_MISS, KIND_MISSED_MATE}
+DEFAULT_KINDS = {
+    KIND_OPENING,
+    KIND_BOOK,
+    KIND_BOOK_LINE,
+    KIND_BLUNDER,
+    KIND_MISTAKE,
+    KIND_MISS,
+    KIND_MISSED_MATE,
+}
 
 KIND_NAGS = {kind: LABEL_NAGS[kind.capitalize()] for kind in ERROR_KINDS}
 BAD_NAGS = {2, 4, 5, 6, 9}
@@ -204,6 +216,9 @@ def analyze_game(
     ):
         cards.append(_book_card(meta, boards, moves, nodes, book))
 
+    if KIND_BOOK_LINE in options.kinds:
+        cards.extend(_book_line_cards(meta, boards, moves, book.last_book_ply, options.user_color))
+
     if engine is None or not options.kinds & set(ENGINE_KINDS):
         return cards
 
@@ -279,6 +294,69 @@ def _book_card(meta: _Game, boards, moves, nodes, book) -> GameCard:
         eval_text="",
         body=_export(game, meta.headers(name, key)),
     )
+
+
+def _book_line_cards(meta: _Game, boards, moves, branch_ply: int, user: chess.Color) -> list[GameCard]:
+    """One card per named catalog line continuing from where the game left theory."""
+    branch = boards[branch_ply]
+    book = load_book()
+    lines = lines_from(branch)
+    name_counts = Counter(line.name for line in lines)
+    cards = []
+    for line in lines:
+        movers = [branch.turn if i % 2 == 0 else not branch.turn for i in range(len(line.moves))]
+        if user not in movers:
+            continue  # nothing to play on your side
+
+        if branch.turn == user:
+            # Your move first: show the game's previous move for context
+            game, node, mode = _puzzle_start(branch, moves[branch_ply - 1] if branch_ply else None)
+        else:
+            # Opponent's move first: it is played automatically (Flipped)
+            game = chess.pgn.Game()
+            game.setup(branch)
+            node, mode = game, MODE_FLIPPED
+
+        last_name = book[branch.epd()].name if branch.epd() in book else None
+        board = branch.copy()
+        for move in line.moves:
+            node = node.add_main_variation(move)
+            board.push(move)
+            entry = book.get(board.epd())
+            if entry and entry.name and entry.name != last_name:
+                node.comment = entry.name
+                last_name = entry.name
+        node.comment = line.name
+
+        if name_counts[line.name] > 1:
+            # Same name, different lines: say where this one ends so the prompt is unambiguous
+            end = board.copy()
+            last = end.pop()
+            name = tr("card.book_line_until", opening=line.name, move=f"{move_number(end)} {end.san(last)}")
+        else:
+            name = tr("card.book_line", opening=line.name)
+        digest = hashlib.sha1(
+            (branch.epd() + " " + " ".join(m.uci() for m in line.moves)).encode()
+        ).hexdigest()[:12]
+        # Keyed by the line, not the game: another game in this opening won't duplicate it
+        key = f"book/{digest}"
+        cards.append(
+            GameCard(
+                kind=KIND_BOOK_LINE,
+                ply=branch_ply,
+                mode=mode,
+                name=name,
+                study_name=meta.title,
+                chapter_url=meta.link,
+                dedupe_key=key,
+                note_tags=[*_tags(meta, KIND_BOOK_LINE), f"opening::{line.eco}"],
+                move_text=line.eco,
+                solution_text=f"{line.name}: {branch.variation_san(line.moves)}",
+                eval_text="",
+                body=_export(game, meta.headers(name, key)),
+            )
+        )
+    return cards
 
 
 def _score_of(infos, move: chess.Move, color: chess.Color):

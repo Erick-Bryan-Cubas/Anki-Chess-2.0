@@ -61,7 +61,7 @@ def test_follow_book(game):
 def test_cards_without_engine(game):
     cards = ga.analyze_game(game, ga.AnalysisOptions(chess.WHITE))
     kinds = {c.kind: c for c in cards}
-    assert set(kinds) == {ga.KIND_OPENING, ga.KIND_BOOK}
+    assert set(kinds) == {ga.KIND_OPENING, ga.KIND_BOOK, ga.KIND_BOOK_LINE}
     book = chess.pgn.read_game(__import__("io").StringIO(kinds[ga.KIND_BOOK].body))
     assert book.headers["AnkiChessId"] == "chesscom/184431566002/6/book"
     # Flipped card: 3... Nf6 is played automatically, then the book move
@@ -69,6 +69,30 @@ def test_cards_without_engine(game):
     first_moves = [v.san() for v in book.next().variations]
     assert first_moves[0] == "Nc3" and "Bf4" in first_moves
     assert 6 in book.next().variations[-1].nags  # the game move is marked as dubious
+
+
+def test_book_lines(game):
+    cards = ga.analyze_game(game, ga.AnalysisOptions(chess.WHITE, kinds={ga.KIND_BOOK_LINE}))
+    names = [c.name for c in cards]
+    assert len(cards) == 70  # named lines from 1. d4 d5 2. c4 c6 3. Nf3 Nf6, any move order
+    assert len(set(names)) == len(names)  # same-name lines say where they end
+    assert "Book line: Slav Defense: Bonet Gambit" in names
+    assert any("Stoltz Variation (until 8. Bb2)" in n for n in names)  # reached via 2. Nf3
+
+    card = next(c for c in cards if c.name.endswith("Anti-Moscow Gambit"))
+    parsed = chess.pgn.read_game(__import__("io").StringIO(card.body))
+    moves = [n.san() for n in parsed.mainline()]
+    assert moves == ["Nf6", "Nc3", "e6", "Bg5", "h6", "Bh4"]  # 3... Nf6 auto-played first
+    assert list(parsed.mainline())[-1].comment == "Semi-Slav Defense: Anti-Moscow Gambit"
+    # The key depends on the line only, so another game in this opening won't duplicate it
+    assert card.dedupe_key.startswith("book/") and "184431566002" not in card.dedupe_key
+
+
+def test_book_lines_as_black(game):
+    cards = ga.analyze_game(game, ga.AnalysisOptions(chess.BLACK, kinds={ga.KIND_BOOK_LINE}))
+    # Black to answer: White's first line move is played automatically from the branch
+    assert cards and all(c.mode == "flipped" for c in cards)
+    assert "Book line: Slav Defense: Bonet Gambit" not in [c.name for c in cards]  # no Black move
 
 
 def test_every_kind_has_a_label():
@@ -91,7 +115,9 @@ def test_error_cards_with_engine(game):
     assert after_prev.san() == "a5"
     played = [v for v in after_prev.variations if v.san() == "bxa5"]
     assert played and 4 in played[0].nags  # repeating the blunder fails the puzzle
-    assert after_prev.variations[0].san() != "bxa5"
+    assert after_prev.variations[0].san() == "Nxe6"  # the move explored in the analysis board
+    mistake = by_ply[(40, ga.KIND_MISTAKE)]  # 21. f4?, explored 21. Nf4
+    assert mistake.solution_text == "Nf4"
     assert not any(c.kind == ga.KIND_INACCURACY for c in cards)  # not selected by default
     assert len({c.dedupe_key for c in cards}) == len(cards)
 

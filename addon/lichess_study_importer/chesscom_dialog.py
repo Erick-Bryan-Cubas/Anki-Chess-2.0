@@ -402,7 +402,7 @@ class ChessComImportDialog(QDialog):
         CollectionOp(
             parent=self,
             op=lambda col: anki_ops.import_chapters(
-                col, rows, deck_name, update_existing, False, stats
+                col, rows, deck_name, update_existing, False, stats, tr("cc.undo")
             ),
         ).success(on_success).run_in_background()
 
