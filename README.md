@@ -89,6 +89,7 @@ files generated in 'dist-anki'
 |---|---|---|
 | Opening | The game's book moves (Lichess opening catalog, bundled offline) | Study |
 | Book move | You left theory while the catalog had a continuation; any book move is accepted | Flipped |
+| Book lines | Every named catalog line from where the game left theory (any move order), even lines not played; the line name is the prompt and you play your side. Keyed by the line, so other games in the same opening don't duplicate them | Flipped |
 | Blunder / Mistake / Miss / Inaccuracy | Position before your error; the solution is a move you explored in the analysis board, otherwise Stockfish's best move (close alternatives are also accepted) | Flipped |
 | Missed mate | You had a forced mate and did not play it; the whole mating line, any final mate accepted | Flipped |
 
