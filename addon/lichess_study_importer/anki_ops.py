@@ -71,6 +71,39 @@ def mode_note_type_name(base_name: str, mode: str) -> str:
     return base_name if mode == MODE_PUZZLE else f"{base_name} {MODE_SUFFIX[mode]}"
 
 
+def note_type_mode(m: dict) -> str:
+    """Mode a chess note type is set up for, from the USER_CONFIG of its template."""
+    for tmpl in m["tmpls"]:
+        match = CONFIG_RE.search(tmpl["qfmt"])
+        if not match:
+            continue
+        try:
+            config = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            continue
+        if config.get("playBothSides"):
+            return MODE_STUDY
+        return MODE_FLIPPED if config.get("flipBoard") else MODE_PUZZLE
+    return MODE_PUZZLE
+
+
+def note_type_choices(base: dict) -> list[tuple[str, str, bool]]:
+    """
+    (name, mode, exists) for the note types a chapter can use: the Puzzle/Flipped/Study
+    variants of the base one (created on import when missing), then the other chess ones.
+    """
+    existing = {m["name"]: note_type_mode(m) for m in find_chess_note_types()}
+    choices = []
+    for mode in (MODE_PUZZLE, MODE_FLIPPED, MODE_STUDY):
+        name = mode_note_type_name(base["name"], mode)
+        if name in existing:
+            choices.append((name, existing.pop(name), True))
+        else:
+            choices.append((name, mode, False))
+    choices += [(name, mode, True) for name, mode in sorted(existing.items())]
+    return choices
+
+
 def _set_template_config(qfmt: str, overrides: dict) -> str:
     match = CONFIG_RE.search(qfmt)
     if match:
@@ -136,7 +169,8 @@ def import_chapters(
     `stats` is filled with created/updated/skipped counts.
 
     Updating also moves the note's cards to the card's deck, so re-importing with
-    "update" reorganises older imports into the current deck layout.
+    "update" reorganises older imports into the current deck layout. Notes imported
+    before in another note type keep it, and are listed in stats["other_type"].
     """
     undo_pos = col.add_custom_undo_entry(undo_label or tr("undo.import"))
     deck_ids: dict[str, int] = {}
@@ -152,13 +186,17 @@ def import_chapters(
         pgn_field, text_field = build_note_fields(ch, strip_anno)
         tags = [*ch.note_tags, *placement.tags]
 
-        existing = _find_existing(col, ch)
+        existing = [col.get_note(nid) for nid in _find_existing(col, ch)]
         if existing:
+            # Changing the note type needs a full sync, so it is only reported:
+            # stats["other_type"] = {chosen note type: [note ids]}
+            for note in existing:
+                if note.mid != model["id"]:
+                    stats.setdefault("other_type", {}).setdefault(model["name"], []).append(note.id)
             if not update_existing:
                 stats["skipped"] += 1
                 continue
-            for nid in existing:
-                note = col.get_note(nid)
+            for note in existing:
                 note.fields[0] = pgn_field
                 if len(note.fields) > 1:
                     note.fields[1] = text_field

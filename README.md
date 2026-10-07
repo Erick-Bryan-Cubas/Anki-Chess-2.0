@@ -74,11 +74,11 @@ files generated in 'dist-anki'
 - Menu: `Tools > Import Lichess study...` (also added to the Companion's `AnkiChess` menu when installed).
 - Interface in English (default) or Brazilian Portuguese: set `"language"` to `"en"`, `"pt-BR"` or `"auto"` (follow Anki's language) in `Tools > Add-ons > Config`.
 - Source: an exported study `.pgn` file, or a study/chapter URL (public API; private studies need a personal token with the `study:read` scope).
-- Every chapter is listed with a suggested mode, which you can change:
-  - **Puzzle**: you play the side to move.
-  - **Flipped**: the first move belongs to the opponent ("Jogam as brancas").
-  - **Study**: you play both sides. Used for full games, which are optional and unchecked by default.
-- Each mode uses its own note type (`<base>`, `<base> Flipped`, `<base> Study`). Missing ones are cloned from the base note type with `flipBoard`/`playBothSides` set.
+- Every chapter shows the side you play (**You play**) and its **Note type**, both editable:
+  - The side is the chapter's orientation on Lichess (studies loaded by URL). For exported files it is guessed from the comments ("Jogam as brancas") or the result; opening lines and games without it are played on both sides.
+  - The note type follows the side: `<base>` when you make the first move, `<base> Flipped` when the first move is the opponent's (played automatically, the board turned to your side), `<base> Study` to play both sides. Missing ones are cloned from the base note type with `flipBoard`/`playBothSides` set; any other chess note type can also be picked.
+  - Full games are optional and unchecked by default.
+- Chapters imported before keep their note type when imported again (changing it needs a full sync): the importer lists them and offers to open them in the Browser, for `Notes > Change Note Type`.
 - Re-importing skips chapters already imported (matched by chapter URL), or updates them if you choose.
 - PGNs pasted in the editor with wrapped lines (Chess.com exports) are fixed without touching the note template: `{{text:PGN}}` drops `<br>` without a space, gluing moves and comments together (`Qg3<br>b5` → `Qg3b5`). The add-on shows those cards with their line breaks, and adds a space before each line break of the `PGN` field when the profile opens and before every sync, so AnkiDroid reads them too.
 

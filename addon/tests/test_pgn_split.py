@@ -54,6 +54,48 @@ def test_suggested_mode(chapters, chapter_id, mode):
     assert by_id(chapters, chapter_id).suggested_mode == mode
 
 
+def chapter(tags: str, moves: str):
+    return p.split_games(f"{tags}\n\n{moves}\n")[0]
+
+
+@pytest.mark.parametrize(
+    "orientation,fen,moves,player,mode",
+    [
+        # Exercises from the #MT197 study: the opponent's move comes first
+        ("black", "rnbqkbnr/1p1ppppp/p7/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 3", "3. c3 d5 *", "b", p.MODE_FLIPPED),
+        ("white", "5k2/5p2/R5pp/p7/r6P/6P1/5PK1/8 b - - 0 39", "39... h5 40. Ra8+ *", "w", p.MODE_FLIPPED),
+        # You make the first move
+        ("white", "6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1", "1. Ra8# *", "w", p.MODE_PUZZLE),
+        ("black", "6k1/5ppp/8/8/8/8/r4PPP/6K1 b - - 0 1", "1... Ra1# *", "b", p.MODE_PUZZLE),
+        # Opening lines and games follow the orientation too
+        ("black", None, "1. e4 c5 2. Nf3 *", "b", p.MODE_FLIPPED),
+        ("white", None, "1. d4 d5 2. c4 *", "w", p.MODE_PUZZLE),
+    ],
+)
+def test_orientation_decides_the_side(orientation, fen, moves, player, mode):
+    tags = f'[Orientation "{orientation}"]'
+    if fen:
+        tags += f'\n[FEN "{fen}"]\n[SetUp "1"]'
+    ch = chapter(tags, moves)
+    assert ch.player == player
+    assert ch.suggested_mode == mode
+
+
+def test_orientation_wins_over_hints():
+    fen = "rnbqkbnr/1p1ppppp/p7/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 3"
+    ch = chapter(f'[Orientation "white"]\n[FEN "{fen}"]', "3. c3 { Jogam as pretas } d5 *")
+    assert ch.player == "w" and ch.suggested_mode == p.MODE_PUZZLE
+    # Without the orientation (exported file) the hint still decides
+    ch = chapter(f'[FEN "{fen}"]', "3. c3 { Jogam as pretas } d5 *")
+    assert ch.player == "b" and ch.suggested_mode == p.MODE_FLIPPED
+
+
+def test_mode_for():
+    assert p.mode_for("w", "w") == p.MODE_PUZZLE
+    assert p.mode_for("b", "w") == p.MODE_FLIPPED
+    assert p.mode_for(None, "w") == p.MODE_STUDY
+
+
 def test_empty_chapter(chapters):
     assert by_id(chapters, "DxgnzhzB").kind == p.KIND_EMPTY
 
