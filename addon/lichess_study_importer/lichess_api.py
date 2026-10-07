@@ -40,7 +40,8 @@ def fetch_study_pgn(
     study_id: str, chapter_id: str | None = None, token: str = "", timeout: int = 30
 ) -> str:
     path = f"{study_id}/{chapter_id}" if chapter_id else study_id
-    url = f"{API_BASE}/{path}.pgn?comments=true&variations=true&clocks=false"
+    # orientation: [Orientation "white"|"black"], the side the chapter is studied from
+    url = f"{API_BASE}/{path}.pgn?comments=true&variations=true&clocks=false&orientation=true"
     headers = {"User-Agent": USER_AGENT}
     if token.strip():
         # Personal token with the study:read scope, needed for private studies

@@ -35,20 +35,27 @@ STRINGS: dict[str, dict[str, str]] = {
         "filter.uncheck_all": "Unselect all",
         "table.chapter": "Chapter",
         "table.kind": "Type",
-        "table.mode": "Mode",
+        "table.side": "You play",
+        "table.note_type": "Note type",
         "table.moves": "Moves",
         "kind.exercise": "Exercise",
         "kind.game": "Full game",
         "kind.line": "Opening line",
         "kind.empty": "Empty",
-        "mode.puzzle": "Puzzle",
-        "mode.flipped": "Flipped",
-        "mode.study": "Study",
+        "side.white": "White",
+        "side.black": "Black",
+        "side.both": "Both sides",
+        "side.tooltip": "Your side in the chapter (its orientation on Lichess). First to move: {side}.",
+        "side.to_move.w": "White",
+        "side.to_move.b": "Black",
+        "note_type.new": "(new)",
+        "note_type.new_tip": "Created on import from the base note type.",
         "modes.hint": (
-            "<small><b>Puzzle</b>: you play the side to move. "
-            "<b>Flipped</b>: the first move is the opponent's (\"White to play\"). "
-            "<b>Study</b>: you play both sides. "
-            "Each mode uses its own note type (cloned from the base note type if missing).</small>"
+            "<small><b>You play</b>: your side in the chapter, from its orientation on Lichess "
+            "(guessed for exported files). The note type follows it: <b>{base}</b> when you make "
+            "the first move, <b>{base} Flipped</b> when the first move is the opponent's (played "
+            "automatically, the board turned to your side), <b>{base} Study</b> to play both "
+            "sides. Missing ones are cloned from the base note type.</small>"
         ),
         "form.base_note_type": "Base note type:",
         "form.deck_root": "Root deck:",
@@ -82,6 +89,13 @@ STRINGS: dict[str, dict[str, str]] = {
         "warn.no_user_config": "The template has no window.USER_CONFIG block to set the mode.",
         "result.summary": (
             "Lichess: {created} created, {updated} updated, {skipped} already imported (skipped)."
+        ),
+        "result.other_type": (
+            "{count} chapters had been imported before in another note type than the one chosen "
+            "now: {targets}. Importing again doesn't change the note type, so their board stays "
+            "on the old side.\n\nTo change it, select them in the Browser and use Notes › Change "
+            "Note Type. The review history is kept, but Anki will ask for a full sync (upload "
+            "from this computer, then download on AnkiDroid).\n\nOpen these notes in the Browser now?"
         ),
         "undo.import": "Import Lichess study",
         "error.no_access": "Study not found or no access (HTTP {code}). {hint}",
@@ -182,22 +196,29 @@ STRINGS: dict[str, dict[str, str]] = {
         "filter.uncheck_all": "Desmarcar tudo",
         "table.chapter": "Capítulo",
         "table.kind": "Tipo",
-        "table.mode": "Modo",
+        "table.side": "Você joga",
+        "table.note_type": "Tipo de nota",
         "table.moves": "Lances",
         "kind.exercise": "Exercício",
         "kind.game": "Partida",
         "kind.line": "Linha de abertura",
         "kind.empty": "Vazio",
-        "mode.puzzle": "Puzzle",
-        "mode.flipped": "Flipped",
-        "mode.study": "Study",
+        "side.white": "Brancas",
+        "side.black": "Pretas",
+        "side.both": "Os dois lados",
+        "side.tooltip": "O seu lado no capítulo (a orientação do capítulo no Lichess). Primeiro a jogar: {side}.",
+        "side.to_move.w": "brancas",
+        "side.to_move.b": "pretas",
+        "note_type.new": "(novo)",
+        "note_type.new_tip": "Criado na importação a partir do tipo de nota base.",
         "modes.hint": (
-            "<small><b>Puzzle</b>: você joga o lado que move na posição. "
-            "<b>Flipped</b>: o 1º lance é do adversário (\"Jogam as brancas\"). "
-            "<b>Study</b>: você joga os dois lados. "
-            "Cada modo usa um note type próprio (criado a partir do note type base, se não existir).</small>"
+            "<small><b>Você joga</b>: o seu lado no capítulo, pela orientação do capítulo no "
+            "Lichess (estimado em arquivos exportados). O tipo de nota acompanha: <b>{base}</b> "
+            "quando o 1º lance é seu, <b>{base} Flipped</b> quando o 1º lance é do adversário "
+            "(jogado sozinho, com o tabuleiro virado para o seu lado), <b>{base} Study</b> para "
+            "jogar os dois lados. Os que não existem são criados a partir do tipo de nota base.</small>"
         ),
-        "form.base_note_type": "Note type base:",
+        "form.base_note_type": "Tipo de nota base:",
         "form.deck_root": "Deck raiz:",
         "form.deck_root_tip": "Os cartões vão para <raiz>::Aberturas::<família>, ::Táticas::<estudo>, ::Partidas comentadas::<estudo> e ::Minhas partidas::<tipo de erro>.",
         "table.deck": "Deck",
@@ -229,6 +250,14 @@ STRINGS: dict[str, dict[str, str]] = {
         "warn.no_user_config": "O template não tem bloco window.USER_CONFIG para configurar o modo.",
         "result.summary": (
             "Lichess: {created} criadas, {updated} atualizadas, {skipped} já existentes puladas."
+        ),
+        "result.other_type": (
+            "{count} capítulos já tinham sido importados num tipo de nota diferente do escolhido "
+            "agora: {targets}. Importar de novo não troca o tipo de nota, então o tabuleiro deles "
+            "continua do lado antigo.\n\nPara trocar, selecione-os no Navegador e use Notas › "
+            "Mudar tipo de nota. O histórico de revisões é mantido, mas o Anki vai pedir uma "
+            "sincronização completa (envie deste computador e depois baixe no AnkiDroid)."
+            "\n\nAbrir essas notas no Navegador agora?"
         ),
         "undo.import": "Importar estudo do Lichess",
         "error.no_access": "Estudo não encontrado ou sem acesso (HTTP {code}). {hint}",

@@ -42,6 +42,8 @@ COLOR_WORDS = {
     "black": "b",
 }
 
+ORIENTATIONS = {"white": "w", "black": "b"}
+
 KIND_EXERCISE = "exercise"  # starts from a [FEN] position
 KIND_LINE = "line"  # from the start, no result: an opening line
 KIND_GAME = "game"  # from the start, with a result: an annotated game
@@ -116,13 +118,22 @@ class Chapter:
         return KIND_GAME if self.tags.get("Result") in FINISHED_RESULTS else KIND_LINE
 
     @property
+    def player(self) -> str | None:
+        """
+        Side the solver plays ("w"/"b"): the chapter orientation set on Lichess (exported
+        with orientation=true), else guessed for exercises. None for lines and games
+        without it: both sides are played.
+        """
+        orientation = ORIENTATIONS.get(self.tags.get("Orientation", "").lower())
+        if orientation:
+            return orientation
+        if self.kind == KIND_EXERCISE:
+            return guess_solver(self)
+        return None
+
+    @property
     def suggested_mode(self) -> str:
-        kind = self.kind
-        if kind in (KIND_GAME, KIND_LINE):
-            return MODE_STUDY
-        if kind == KIND_EMPTY:
-            return MODE_PUZZLE
-        return suggest_exercise_mode(self)
+        return mode_for(self.player, self.side_to_move)
 
     @property
     def preview(self) -> str:
@@ -175,28 +186,29 @@ def _hinted_color(comment: str | None) -> str | None:
     return COLOR_WORDS[(m.group("a") or m.group("b")).lower()]
 
 
-def suggest_exercise_mode(ch: Chapter) -> str:
+def mode_for(player: str | None, side_to_move: str) -> str:
     """
-    Guess if the solver plays the side to move (puzzle) or the other side,
-    with the first move being the opponent's set-up move (flipped).
+    Puzzle when the solver makes the first move, Flipped when the first move is the
+    opponent's (played automatically), Study when both sides are played.
     """
-    stm = ch.side_to_move
+    if player is None:
+        return MODE_STUDY
+    return MODE_PUZZLE if player == side_to_move else MODE_FLIPPED
+
+
+def guess_solver(ch: Chapter) -> str:
+    """Side the solver plays in an exercise without orientation (exported files)."""
     m = FIRST_MOVE_RE.match(ch.movetext)
     if m:
-        # A hint right after the first move names the solver ("Jogam as brancas").
-        after = _hinted_color(m.group("after"))
-        if after:
-            return MODE_PUZZLE if after == stm else MODE_FLIPPED
-        # A hint before the first move is a question to the side to move.
-        lead = _hinted_color(m.group("lead"))
-        if lead:
-            return MODE_PUZZLE if lead == stm else MODE_FLIPPED
+        # A hint right after the first move names the solver ("Jogam as brancas"),
+        # a hint before it is a question to the side to move.
+        hinted = _hinted_color(m.group("after")) or _hinted_color(m.group("lead"))
+        if hinted:
+            return hinted
 
     # Otherwise, the winner of a decisive result is usually the solver.
     winner = {"1-0": "w", "0-1": "b"}.get(ch.tags.get("Result", ""))
-    if winner and winner != stm:
-        return MODE_FLIPPED
-    return MODE_PUZZLE
+    return winner or ch.side_to_move
 
 
 def split_games(text: str) -> list[Chapter]:

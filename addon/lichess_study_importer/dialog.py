@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 
 import anki.lang
+import aqt
 from aqt import mw
 from aqt.operations import CollectionOp
 from aqt.qt import (
@@ -26,7 +27,7 @@ from aqt.qt import (
     QTableWidgetItem,
     QVBoxLayout,
 )
-from aqt.utils import showWarning, tooltip
+from aqt.utils import askUser, showWarning, tooltip
 
 from . import anki_ops, decks
 from .i18n import resolve_language, set_language, tr
@@ -37,9 +38,9 @@ from .pgn_split import (
     KIND_GAME,
     KIND_LINE,
     MODE_FLIPPED,
-    MODE_PUZZLE,
     MODE_STUDY,
     Chapter,
+    mode_for,
     split_games,
 )
 
@@ -50,8 +51,9 @@ KIND_KEYS = {
     KIND_EMPTY: "kind.empty",
 }
 CHAPTER_KINDS = (KIND_EXERCISE, KIND_LINE, KIND_GAME)  # the kind decides the deck
-MODES = [(MODE_PUZZLE, "mode.puzzle"), (MODE_FLIPPED, "mode.flipped"), (MODE_STUDY, "mode.study")]
-COL_CHECK, COL_NAME, COL_KIND, COL_MODE, COL_DECK, COL_PREVIEW = range(6)
+SIDES = (("w", "side.white"), ("b", "side.black"), (None, "side.both"))  # None: Study
+OTHER_SIDE = {"w": "b", "b": "w"}
+COL_CHECK, COL_NAME, COL_KIND, COL_SIDE, COL_NOTE_TYPE, COL_DECK, COL_PREVIEW = range(7)
 
 
 def lichess_error_text(e: LichessError) -> str:
@@ -129,28 +131,29 @@ class StudyImportDialog(QDialog):
         filters.addWidget(btn_none)
         layout.addLayout(filters)
 
-        self.table = QTableWidget(0, 6)
+        self.table = QTableWidget(0, 7)
         self.table.setHorizontalHeaderLabels(
             [
                 "",
                 tr("table.chapter"),
                 tr("table.kind"),
-                tr("table.mode"),
+                tr("table.side"),
+                tr("table.note_type"),
                 tr("table.deck"),
                 tr("table.moves"),
             ]
         )
         header = self.table.horizontalHeader()
-        for col in (COL_CHECK, COL_KIND, COL_MODE):
+        for col in (COL_CHECK, COL_KIND, COL_SIDE, COL_NOTE_TYPE):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
         for col in (COL_NAME, COL_DECK, COL_PREVIEW):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
         layout.addWidget(self.table, 1)
 
-        hint = QLabel(tr("modes.hint"))
-        hint.setWordWrap(True)
-        layout.addWidget(hint)
+        self.hint = QLabel()
+        self.hint.setWordWrap(True)
+        layout.addWidget(self.hint)
 
         # --- Destination ---
         form = QFormLayout()
@@ -161,7 +164,12 @@ class StudyImportDialog(QDialog):
         idx = self.model_combo.findText(preferred) if preferred else -1
         if idx >= 0:
             self.model_combo.setCurrentIndex(idx)
+        self.model_combo.currentIndexChanged.connect(self.on_base_changed)
         form.addRow(tr("form.base_note_type"), self.model_combo)
+        # Note types a chapter can use: (name, mode, exists)
+        self.choices: list[tuple[str, str, bool]] = []
+        self.choice_modes: dict[str, str] = {}
+        self.update_choices()
 
         self.root_edit = QLineEdit(decks.root_name(self.config.get("deck_root")))
         self.root_edit.setToolTip(tr("form.deck_root_tip"))
@@ -291,16 +299,75 @@ class StudyImportDialog(QDialog):
                 kind_combo.currentIndexChanged.connect(lambda _, r=row: self.refresh_deck(r))
                 self.table.setCellWidget(row, COL_KIND, kind_combo)
 
-            combo = QComboBox()
-            for key, label_key in MODES:
-                combo.addItem(tr(label_key), key)
-            mode = ch.suggested_mode if kind == ch.kind else MODE_STUDY
-            combo.setCurrentIndex([k for k, _ in MODES].index(mode))
-            combo.setEnabled(kind != KIND_EMPTY)
-            self.table.setCellWidget(row, COL_MODE, combo)
+            side_combo = QComboBox()
+            for side, label_key in SIDES:
+                side_combo.addItem(tr(label_key), side)
+            side_combo.setCurrentIndex([s for s, _ in SIDES].index(ch.player))
+            side_combo.setToolTip(tr("side.tooltip", side=tr(f"side.to_move.{ch.side_to_move}")))
+            side_combo.setEnabled(kind != KIND_EMPTY)
+            side_combo.currentIndexChanged.connect(lambda _, r=row: self.on_side_changed(r))
+            self.table.setCellWidget(row, COL_SIDE, side_combo)
+
+            note_type_combo = QComboBox()
+            note_type_combo.setEnabled(kind != KIND_EMPTY)
+            note_type_combo.currentIndexChanged.connect(
+                lambda _, r=row: self.on_note_type_changed(r)
+            )
+            self.table.setCellWidget(row, COL_NOTE_TYPE, note_type_combo)
+            self.fill_note_types(row)
 
         self.refresh_decks()
         self.import_btn.setEnabled(self.model_combo.count() > 0)
+
+    # --- Side and note type ---
+
+    def update_choices(self):
+        base = mw.col.models.get(self.model_combo.currentData()) if self.model_combo.count() else None
+        self.choices = anki_ops.note_type_choices(base) if base else []
+        self.choice_modes = {name: mode for name, mode, _ in self.choices}
+        self.hint.setText(tr("modes.hint", base=base["name"] if base else "AnkiChess"))
+
+    def on_base_changed(self):
+        self.update_choices()
+        for row in range(len(self.chapters)):
+            self.fill_note_types(row)
+
+    def row_side(self, row: int) -> str | None:
+        return self.table.cellWidget(row, COL_SIDE).currentData()
+
+    def fill_note_types(self, row: int):
+        """Note type list of a row, on the default for the side played."""
+        combo = self.table.cellWidget(row, COL_NOTE_TYPE)
+        combo.blockSignals(True)
+        combo.clear()
+        for name, mode, exists in self.choices:
+            label = name if exists else f"{name} {tr('note_type.new')}"
+            combo.addItem(label, name)
+            if not exists:
+                combo.setItemData(combo.count() - 1, tr("note_type.new_tip"), Qt.ItemDataRole.ToolTipRole)
+        combo.blockSignals(False)
+        self.on_side_changed(row)
+
+    def on_side_changed(self, row: int):
+        """Puzzle when you make the first move, Flipped when the opponent does, Study for both."""
+        mode = mode_for(self.row_side(row), self.chapters[row].side_to_move)
+        combo = self.table.cellWidget(row, COL_NOTE_TYPE)
+        index = next((i for i, (_, m, _) in enumerate(self.choices) if m == mode), -1)
+        combo.blockSignals(True)
+        combo.setCurrentIndex(index)
+        combo.blockSignals(False)
+
+    def on_note_type_changed(self, row: int):
+        """Show the side a note type makes you play, without changing the note type back."""
+        mode = self.choice_modes.get(self.table.cellWidget(row, COL_NOTE_TYPE).currentData())
+        if not mode:
+            return
+        stm = self.chapters[row].side_to_move
+        side = None if mode == MODE_STUDY else OTHER_SIDE[stm] if mode == MODE_FLIPPED else stm
+        side_combo = self.table.cellWidget(row, COL_SIDE)
+        side_combo.blockSignals(True)
+        side_combo.setCurrentIndex([s for s, _ in SIDES].index(side))
+        side_combo.blockSignals(False)
 
     # --- Decks ---
 
@@ -351,14 +418,15 @@ class StudyImportDialog(QDialog):
         self.set_checked(KIND_GAME, checked)
 
     def selected_rows(self) -> list[tuple[Chapter, str, decks.Placement]]:
+        """(chapter, note type name, placement) of the checked chapters."""
         rows = []
         for row, ch in enumerate(self.chapters):
             if self.row_kind(row) == KIND_EMPTY:
                 continue
             if self.table.item(row, COL_CHECK).checkState() != Qt.CheckState.Checked:
                 continue
-            mode = self.table.cellWidget(row, COL_MODE).currentData()
-            rows.append((ch, mode, self.placement(row)))
+            name = self.table.cellWidget(row, COL_NOTE_TYPE).currentData()
+            rows.append((ch, name, self.placement(row)))
         return rows
 
     # --- Import ---
@@ -373,16 +441,17 @@ class StudyImportDialog(QDialog):
             showWarning(tr("warn.base_missing"), parent=self)
             return
 
-        # Note types are created up front (outside the undoable note import)
+        # Missing Flipped/Study note types are created up front (outside the undoable import)
+        models = {}
         try:
-            models = {
-                mode: anki_ops.ensure_mode_note_type(base, mode)
-                for mode in {mode for _, mode, _ in selected}
-            }
+            for name in {name for _, name, _ in selected}:
+                models[name] = mw.col.models.by_name(name) or anki_ops.ensure_mode_note_type(
+                    base, self.choice_modes[name]
+                )
         except anki_ops.ChessImportError as e:
             showWarning(str(e), parent=self)
             return
-        rows = [(ch, models[mode], placement) for ch, mode, placement in selected]
+        rows = [(ch, models[name], placement) for ch, name, placement in selected]
 
         update_existing = self.update_existing.isChecked()
         strip_anno = bool(self.config.get("strip_anno", True))
@@ -402,6 +471,7 @@ class StudyImportDialog(QDialog):
         def on_success(_changes):
             tooltip(tr("result.summary", **stats), parent=mw)
             self.accept()
+            offer_note_type_change(stats.get("other_type"))
 
         CollectionOp(
             parent=self,
@@ -409,6 +479,21 @@ class StudyImportDialog(QDialog):
                 col, rows, update_existing, strip_anno, stats
             ),
         ).success(on_success).run_in_background()
+
+
+def offer_note_type_change(other: dict[str, list[int]] | None):
+    """
+    Chapters imported before in another note type keep it (e.g. AnkiChess for a chapter
+    played as Black). Changing it needs a full sync, so the notes are shown in the
+    Browser for Notes > Change Note Type.
+    """
+    if not other:
+        return
+    count = sum(len(nids) for nids in other.values())
+    targets = ", ".join(f"{name} ({len(nids)})" for name, nids in other.items())
+    if askUser(tr("result.other_type", count=count, targets=targets), parent=mw):
+        nids = ",".join(str(nid) for nids in other.values() for nid in nids)
+        aqt.dialogs.open("Browser", mw, search=(f"nid:{nids}",))
 
 
 def show_import_dialog():
