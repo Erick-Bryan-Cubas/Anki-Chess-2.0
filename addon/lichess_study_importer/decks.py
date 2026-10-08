@@ -103,12 +103,18 @@ def place_chapter(
     when the PGN has no StudyName (e.g. the file name).
     """
     kind = kind or suggest_kind(ch)
-    study = deck_part(ch.study_name) or deck_part(fallback_study) or tr("deck.unnamed_study")
+    base = study_deck(ch, root, fallback_study)
     if kind == KIND_LINE:
         tags = opening_placement(root, opening if opening is not None else chapter_opening(ch)).tags
-        return Placement(f"{root}::{study}::{tr('deck.lines')}", tags)
+        return Placement(f"{base}::{tr('deck.lines')}", tags)
     section = tr("deck.games") if kind == KIND_GAME else tr("deck.tactics")
-    return Placement(f"{root}::{study}::{section}")
+    return Placement(f"{base}::{section}")
+
+
+def study_deck(ch: Chapter, root: str, fallback_study: str = "") -> str:
+    """<root>::<study>, the deck holding a Lichess study's chapters."""
+    study = deck_part(ch.study_name) or deck_part(fallback_study) or tr("deck.unnamed_study")
+    return f"{root}::{study}"
 
 
 def place_game_card(card, root: str) -> Placement:
