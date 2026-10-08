@@ -55,11 +55,8 @@ STRINGS: dict[str, dict[str, str]] = {
             "(guessed for exported files). The note type follows it: <b>{base}</b> when you make "
             "the first move, <b>{base} Flipped</b> when the first move is the opponent's (played "
             "automatically, the board turned to your side), <b>{base} Study</b> to play both "
-            "sides. Missing ones are cloned from the base note type.</small>"
+            "sides. Missing ones are created from {base}.</small>"
         ),
-        "form.base_note_type": "Base note type:",
-        "form.deck_root": "Root deck:",
-        "form.deck_root_tip": "The same for every study: each study becomes <root>::<study>::Opening lines, ::Tactics and ::Annotated games (the study name comes from Lichess). Chess.com games go to <root>::Openings::<family> and <root>::My games::<error type>.",
         "table.deck": "Deck",
         "deck.root": "Chess",
         "deck.openings": "Openings",
@@ -217,11 +214,8 @@ STRINGS: dict[str, dict[str, str]] = {
             "Lichess (estimado em arquivos exportados). O tipo de nota acompanha: <b>{base}</b> "
             "quando o 1º lance é seu, <b>{base} Flipped</b> quando o 1º lance é do adversário "
             "(jogado sozinho, com o tabuleiro virado para o seu lado), <b>{base} Study</b> para "
-            "jogar os dois lados. Os que não existem são criados a partir do tipo de nota base.</small>"
+            "jogar os dois lados. Os que não existem são criados a partir do {base}.</small>"
         ),
-        "form.base_note_type": "Tipo de nota base:",
-        "form.deck_root": "Deck raiz:",
-        "form.deck_root_tip": "O mesmo para todos os estudos: cada estudo vira <raiz>::<estudo>::Linhas de abertura, ::Táticas e ::Partidas comentadas (o nome do estudo vem do Lichess). Partidas do Chess.com vão para <raiz>::Aberturas::<família> e <raiz>::Minhas partidas::<tipo de erro>.",
         "table.deck": "Deck",
         "deck.root": "Xadrez",
         "deck.openings": "Aberturas",
