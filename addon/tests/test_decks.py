@@ -51,12 +51,19 @@ def test_lichess_chapters():
         '[FEN "4k3/8/8/8/8/8/8/R3K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Ra8# *\n'
     )
     line, game, exercise = split_games(text)
-    assert decks.place_chapter(line, "Xadrez").deck == "Xadrez::Aberturas::Sicilian Defense"
+    # One deck per study, split by chapter kind
+    assert decks.place_chapter(line, "Xadrez").deck == "Xadrez::O'Kelly: curso::Linhas de abertura"
     assert decks.place_chapter(line, "Xadrez").tags == ["abertura::sicilian_defense::o_kelly_variation"]
-    assert decks.place_chapter(game, "Xadrez").deck == "Xadrez::Partidas comentadas::O'Kelly: curso"
-    assert decks.place_chapter(exercise, "Xadrez").deck == "Xadrez::Táticas::O'Kelly: curso"
+    assert decks.place_chapter(game, "Xadrez").deck == "Xadrez::O'Kelly: curso::Partidas comentadas"
+    assert decks.place_chapter(exercise, "Xadrez").deck == "Xadrez::O'Kelly: curso::Táticas"
     # The kind chosen in the dialog wins over the detected one
-    assert decks.place_chapter(game, "Xadrez", kind="line").deck.startswith("Xadrez::Aberturas::")
+    assert decks.place_chapter(game, "Xadrez", kind="line").deck == "Xadrez::O'Kelly: curso::Linhas de abertura"
+
+
+def test_study_name_fallbacks():
+    ch = split_games('[FEN "4k3/8/8/8/8/8/8/R3K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Ra8# *\n')[0]
+    assert decks.place_chapter(ch, "Xadrez", fallback_study="pl05c").deck == "Xadrez::pl05c::Táticas"
+    assert decks.place_chapter(ch, "Xadrez").deck == "Xadrez::Estudo::Táticas"
 
 
 def test_fen_chapter_from_a_book_position_is_an_opening_line():
@@ -65,7 +72,7 @@ def test_fen_chapter_from_a_book_position_is_an_opening_line():
     ch = split_games(f'[StudyName "Curso"]\n[FEN "{fen}"]\n[SetUp "1"]\n\n3. c3 d5 *\n')[0]
     assert ch.kind == "exercise"
     assert decks.suggest_kind(ch) == "line"
-    assert decks.place_chapter(ch, "Xadrez").deck == "Xadrez::Aberturas::Sicilian Defense"
+    assert decks.place_chapter(ch, "Xadrez").deck == "Xadrez::Curso::Linhas de abertura"
 
     tactic = split_games('[FEN "4k3/8/8/8/8/8/8/R3K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Ra8# *\n')[0]
     assert decks.suggest_kind(tactic) == "exercise"

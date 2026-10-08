@@ -87,15 +87,17 @@ files generated in 'dist-anki'
 Both importers file cards under one root deck (`deck_root`, default `Chess`, or `Xadrez` in pt-BR):
 
 ```
-<root>::Openings::<family>           opening lines, book moves, book lines
+<root>::<study>::Opening lines       Lichess opening lines
                                      (tag <opening>::<family>::<variation>, e.g. opening::slav_defense::czech_variation)
-<root>::Tactics::<study>             Lichess chapters set up from a position
-<root>::Annotated games::<study>     Lichess full games (a result such as 1-0)
+<root>::<study>::Tactics             Lichess chapters set up from a position
+<root>::<study>::Annotated games     Lichess full games (a result such as 1-0)
+<root>::Openings::<family>           Chess.com opening, book moves, book lines (same tag)
 <root>::My games::<error type>       Chess.com blunders, mistakes, misses, inaccuracies, missed mates
 ```
 
+- Each Lichess study gets its own deck, named after the study (`StudyName`; the file name for PGNs without it). The root deck is the same for every study.
 - Lichess chapters are classified automatically: from a `[FEN]` → tactics, unless the position is in the opening catalog; no FEN and no result (`*`) → opening line; no FEN with a result → annotated game. The type can be changed per chapter; the **Deck** column shows where each card goes.
-- Opening decks use the family of the catalog name (`Slav Defense`, `Semi-Slav Defense`...), so Lichess opening chapters and Chess.com book lines of the same opening end up together.
+- Opening lines are tagged with the family of the catalog name (`Slav Defense`, `Semi-Slav Defense`...), so the same opening can be reviewed across studies with a tag search; Chess.com opening cards are filed by that family.
 - Re-importing with **Update notes already imported** also moves older notes into this layout.
 
 ## Chess.com games
