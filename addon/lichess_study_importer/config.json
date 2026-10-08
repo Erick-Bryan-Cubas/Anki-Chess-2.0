@@ -1,6 +1,8 @@
 {
   "language": "en",
   "deck_root": "",
+  "study_decks": {},
+  "chapter_decks": {},
   "include_games": false,
   "update_existing": false,
   "strip_anno": true,

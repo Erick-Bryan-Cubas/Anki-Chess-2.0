@@ -97,6 +97,7 @@ Both importers file cards under one root deck, set in the add-on config (`deck_r
 ```
 
 - Each Lichess study gets its own deck, named after the study (`StudyName`; the file name for PGNs without it). The root deck is the same for every study.
+- Once a study is loaded, its deck can be renamed (**Study deck** field) and so can each chapter's subdeck (double-click a **Deck** cell or press F2; with several rows selected, F2 renames them all). `::` creates levels, e.g. `Chess::Courses::Sicilian`; spaces around each level are trimmed and empty levels dropped, as Anki would otherwise name them `blank`. An empty subdeck files the chapter in the study deck itself. Renamed decks are kept for the next import of the same study (`study_decks` / `chapter_decks` in the config), so updating it doesn't move the notes back.
 - Lichess chapters are classified automatically: from a `[FEN]` → tactics, unless the position is in the opening catalog; no FEN and no result (`*`) → opening line; no FEN with a result → annotated game. The type can be changed per chapter; the **Deck** column shows where each card goes.
 - Opening lines are tagged with the family of the catalog name (`Slav Defense`, `Semi-Slav Defense`...), so the same opening can be reviewed across studies with a tag search; Chess.com opening cards are filed by that family.
 - Re-importing with **Update notes already imported** also moves older notes into this layout.

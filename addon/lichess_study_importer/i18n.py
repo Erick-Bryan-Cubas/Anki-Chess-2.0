@@ -62,20 +62,36 @@ STRINGS: dict[str, dict[str, str]] = {
             "{base} Study: you play both sides.\n"
             "Missing ones are created from {base}."
         ),
-        "table.deck_tip": "Subdeck inside the study deck shown above. Hover a cell for the full deck and tags.",
+        "table.deck_tip": (
+            "Subdeck inside the study deck (field above). Double-click a cell or press F2 to "
+            "rename it: \"::\" creates more levels (Games::Tal), and an empty name puts the "
+            "chapter in the study deck itself. With several rows selected, F2 renames them all.\n"
+            "Hover a cell for the full deck and tags."
+        ),
         "table.open_tip": "Double-click to open it on Lichess.",
         "table.hint": (
-            "<small>Hover the column titles for help. Select several chapters (Ctrl/Shift+click "
-            "on the names) and change one of their lists to change them all. Drag the column "
-            "borders to resize them; right-click the titles to show or hide columns.</small>"
+            "<small>Hover the column titles for help. Select several chapters (Ctrl/Shift+click) "
+            "and change one of their lists, or press F2 on a Deck cell, to change them all. "
+            "Drag the column borders to resize them; right-click the titles to show or hide "
+            "columns.</small>"
         ),
-        "study.deck": "Deck: <b>{deck}</b>",
+        "form.study_deck": "Study deck:",
+        "form.study_deck_tip": (
+            "Deck for this study's chapters, which go to its subdecks (Deck column). \"::\" "
+            "separates the levels, e.g. Chess::Courses::Sicilian; spaces around each level are "
+            "removed and empty levels dropped. Anki ignores upper/lower case in deck names, so a "
+            "deck with the same name is reused. Renamed decks are kept for the next import of "
+            "this study."
+        ),
+        "form.study_deck_reset": "Default names",
+        "form.study_deck_reset_tip": "Back to the study name from Lichess and the default subdecks.",
         "token.show": "Private study?",
         "button.import_count": "Import {count}",
         "table.deck": "Deck",
         "deck.root": "Chess",
         "deck.openings": "Openings",
         "deck.lines": "Opening lines",
+        "deck.study_itself": "(study deck)",
         "deck.other_openings": "Other",
         "deck.tactics": "Tactics",
         "deck.games": "Annotated games",
@@ -236,21 +252,36 @@ STRINGS: dict[str, dict[str, str]] = {
             "{base} Study: você joga os dois lados.\n"
             "Os que não existem são criados a partir do {base}."
         ),
-        "table.deck_tip": "Subdeck dentro do deck do estudo mostrado acima. Passe o mouse na célula para ver o deck completo e as tags.",
+        "table.deck_tip": (
+            "Subdeck dentro do deck do estudo (campo acima). Clique duas vezes na célula ou "
+            "aperte F2 para renomear: \"::\" cria mais níveis (Partidas::Tal), e um nome vazio "
+            "põe o capítulo no próprio deck do estudo. Com várias linhas selecionadas, o F2 "
+            "renomeia todas.\nPasse o mouse na célula para ver o deck completo e as tags."
+        ),
         "table.open_tip": "Clique duas vezes para abrir no Lichess.",
         "table.hint": (
             "<small>Passe o mouse nos títulos das colunas para ver a ajuda. Selecione vários "
-            "capítulos (Ctrl/Shift+clique nos nomes) e mude uma das listas para mudar todos. "
-            "Arraste a borda das colunas para ajustar a largura; clique com o botão direito nos "
-            "títulos para mostrar ou esconder colunas.</small>"
+            "capítulos (Ctrl/Shift+clique) e mude uma das listas, ou aperte F2 numa célula de "
+            "Deck, para mudar todos. Arraste a borda das colunas para ajustar a largura; clique "
+            "com o botão direito nos títulos para mostrar ou esconder colunas.</small>"
         ),
-        "study.deck": "Deck: <b>{deck}</b>",
+        "form.study_deck": "Deck do estudo:",
+        "form.study_deck_tip": (
+            "Deck dos capítulos deste estudo, que vão para os subdecks dele (coluna Deck). "
+            "\"::\" separa os níveis, ex.: Xadrez::Cursos::Siciliana; os espaços em volta de cada "
+            "nível são removidos e níveis vazios descartados. O Anki não diferencia maiúsculas "
+            "de minúsculas nos nomes de deck, então um deck com o mesmo nome é reaproveitado. "
+            "Os nomes editados ficam guardados para a próxima importação deste estudo."
+        ),
+        "form.study_deck_reset": "Nomes padrão",
+        "form.study_deck_reset_tip": "Volta para o nome do estudo no Lichess e os subdecks padrão.",
         "token.show": "Estudo privado?",
         "button.import_count": "Importar {count}",
         "table.deck": "Deck",
         "deck.root": "Xadrez",
         "deck.openings": "Aberturas",
         "deck.lines": "Linhas de abertura",
+        "deck.study_itself": "(deck do estudo)",
         "deck.other_openings": "Outras",
         "deck.tactics": "Táticas",
         "deck.games": "Partidas comentadas",

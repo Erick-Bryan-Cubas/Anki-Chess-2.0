@@ -60,6 +60,27 @@ def test_lichess_chapters():
     assert decks.place_chapter(game, "Xadrez", kind="line").deck == "Xadrez::O'Kelly: curso::Linhas de abertura"
 
 
+def test_clean_deck_name():
+    # As Anki stores it: trimmed levels, no control characters; empty levels are dropped
+    # here (Anki would name them "blank")
+    assert decks.clean_deck_name("  Xadrez ::  Cursos  :: Siciliana  ") == "Xadrez::Cursos::Siciliana"
+    assert decks.clean_deck_name("Xadrez::::Vazio::") == "Xadrez::Vazio"
+    assert decks.clean_deck_name("::Início") == "Início"
+    assert decks.clean_deck_name("Tab\taqui") == "Tabaqui"
+    assert decks.clean_deck_name("O'Kelly: Outras opções") == "O'Kelly: Outras opções"  # one colon stays
+    assert decks.clean_deck_name(" :: ") == ""
+
+
+def test_renamed_study_deck_and_subdeck():
+    ch = split_games('[StudyName "Curso"]\n[Result "1-0"]\n\n1. e4 e5 1-0\n')[0]
+    assert decks.place_chapter(ch, "Xadrez", deck="Cursos :: Curso").deck == "Cursos::Curso::Partidas comentadas"
+    assert decks.place_chapter(ch, "Xadrez", subdeck="Partidas::Tal").deck == "Xadrez::Curso::Partidas::Tal"
+    # Empty subdeck: the study deck itself
+    assert decks.place_chapter(ch, "Xadrez", subdeck="").deck == "Xadrez::Curso"
+    # An empty study deck falls back to the default
+    assert decks.place_chapter(ch, "Xadrez", deck=" :: ").deck == "Xadrez::Curso::Partidas comentadas"
+
+
 def test_study_name_fallbacks():
     ch = split_games('[FEN "4k3/8/8/8/8/8/8/R3K3 w - - 0 1"]\n[SetUp "1"]\n\n1. Ra8# *\n')[0]
     assert decks.place_chapter(ch, "Xadrez", fallback_study="pl05c").deck == "Xadrez::pl05c::Táticas"

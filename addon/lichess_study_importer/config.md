@@ -4,6 +4,9 @@
   `<root>::<study>::Opening lines`, `::Tactics` and `::Annotated games` (opening lines are tagged
   `opening::<family>::<variation>`); Chess.com cards go to `<root>::Openings::<family>` and
   `<root>::My games::<error type>`. Re-importing with "update" moves older notes into this layout.
+- **study_decks** / **chapter_decks**: deck names renamed in the import window (the study deck, and
+  the subdeck of a chapter), by study and by chapter, so that importing the study again uses them.
+  Filled by the window; remove an entry to go back to the default name.
 - **include_games**: select full-game chapters (no FEN) by default.
 - **update_existing**: on re-import, update notes already imported instead of skipping them.
 - **strip_anno**: remove the `[%anno ...]` markers Lichess leaves in comments.
