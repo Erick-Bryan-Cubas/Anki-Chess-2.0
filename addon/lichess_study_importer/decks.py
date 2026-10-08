@@ -1,10 +1,11 @@
 """
 Where each imported card goes: deck and extra tags.
 
-    <root>::Openings::<family>          opening lines, book moves, book lines
+    <root>::<study>::Opening lines      Lichess opening lines
                                         (+ tag <opening>::<family>::<variation>)
-    <root>::Tactics::<study>            Lichess chapters starting from a FEN
-    <root>::Annotated games::<study>    Lichess full games
+    <root>::<study>::Tactics            Lichess chapters starting from a FEN
+    <root>::<study>::Annotated games    Lichess full games
+    <root>::Openings::<family>          Chess.com opening, book moves, book lines (+ tag)
     <root>::My games::<error type>      Chess.com errors and missed mates
 
 Pure Python (no aqt imports) so it can be unit tested outside Anki.
@@ -89,14 +90,25 @@ def suggest_kind(ch: Chapter) -> str:
     return ch.kind
 
 
-def place_chapter(ch: Chapter, root: str, kind: str | None = None, opening: str | None = None) -> Placement:
-    """kind overrides the suggested chapter kind; opening avoids parsing the chapter again."""
+def place_chapter(
+    ch: Chapter,
+    root: str,
+    kind: str | None = None,
+    opening: str | None = None,
+    fallback_study: str = "",
+) -> Placement:
+    """
+    One deck per study, split by chapter kind. kind overrides the suggested chapter
+    kind; opening avoids parsing the chapter again; fallback_study names the study
+    when the PGN has no StudyName (e.g. the file name).
+    """
     kind = kind or suggest_kind(ch)
+    study = deck_part(ch.study_name) or deck_part(fallback_study) or tr("deck.unnamed_study")
     if kind == KIND_LINE:
-        return opening_placement(root, opening if opening is not None else chapter_opening(ch))
-    study = deck_part(ch.study_name) or tr("deck.unnamed_study")
+        tags = opening_placement(root, opening if opening is not None else chapter_opening(ch)).tags
+        return Placement(f"{root}::{study}::{tr('deck.lines')}", tags)
     section = tr("deck.games") if kind == KIND_GAME else tr("deck.tactics")
-    return Placement(f"{root}::{section}::{study}")
+    return Placement(f"{root}::{study}::{section}")
 
 
 def place_game_card(card, root: str) -> Placement:

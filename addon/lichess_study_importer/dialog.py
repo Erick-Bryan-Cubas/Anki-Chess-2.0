@@ -86,6 +86,7 @@ class StudyImportDialog(QDialog):
         self.chapters: list[Chapter] = []
         self.kinds: list[str] = []
         self._openings: dict[int, str | None] = {}  # row -> catalog opening name
+        self.study_fallback = ""  # deck name for PGNs without StudyName: the file name
 
         layout = QVBoxLayout(self)
 
@@ -149,6 +150,8 @@ class StudyImportDialog(QDialog):
         for col in (COL_NAME, COL_DECK, COL_PREVIEW):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
+        # Long decks keep both ends visible: the study and the section
+        self.table.setTextElideMode(Qt.TextElideMode.ElideMiddle)
         layout.addWidget(self.table, 1)
 
         self.hint = QLabel()
@@ -260,6 +263,7 @@ class StudyImportDialog(QDialog):
             )
         )
         self._openings = {}
+        self.study_fallback = os.path.splitext(source)[0]
         self.populate_table()
 
     def populate_table(self):
@@ -384,6 +388,7 @@ class StudyImportDialog(QDialog):
             decks.root_name(self.root_edit.text()),
             kind=kind,
             opening=self._openings.get(row),
+            fallback_study=self.study_fallback,
         )
 
     def refresh_deck(self, row: int):
@@ -391,7 +396,9 @@ class StudyImportDialog(QDialog):
             return
         placement = self.placement(row)
         item = self.table.item(row, COL_DECK)
-        item.setText(placement.deck)
+        # The root is in the field below: show the deck from the study on
+        root = decks.root_name(self.root_edit.text())
+        item.setText(placement.deck.removeprefix(f"{root}::"))
         item.setToolTip("\n".join([placement.deck, *placement.tags]))
 
     def refresh_decks(self):
