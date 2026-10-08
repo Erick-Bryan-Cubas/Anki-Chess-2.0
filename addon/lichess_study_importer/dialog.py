@@ -5,6 +5,7 @@ Qt dialog: load a Lichess study (file or URL), pick chapters/modes and import.
 from __future__ import annotations
 
 import os
+import textwrap
 
 import anki.lang
 import aqt
@@ -20,13 +21,24 @@ from aqt.qt import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMenu,
     QPushButton,
     Qt,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
+    QWidget,
 )
-from aqt.utils import askUser, showWarning, tooltip
+from aqt.utils import (
+    askUser,
+    openLink,
+    restoreGeom,
+    restoreHeader,
+    saveGeom,
+    saveHeader,
+    showWarning,
+    tooltip,
+)
 
 from . import anki_ops, decks
 from .i18n import resolve_language, set_language, tr
@@ -53,6 +65,15 @@ CHAPTER_KINDS = (KIND_EXERCISE, KIND_LINE, KIND_GAME)  # the kind decides the de
 SIDES = (("w", "side.white"), ("b", "side.black"), (None, "side.both"))  # None: Study
 OTHER_SIDE = {"w": "b", "b": "w"}
 COL_CHECK, COL_NAME, COL_KIND, COL_SIDE, COL_NOTE_TYPE, COL_DECK, COL_PREVIEW = range(7)
+COLUMN_WIDTHS = {
+    COL_CHECK: 28,
+    COL_NAME: 260,
+    COL_KIND: 140,
+    COL_SIDE: 110,
+    COL_NOTE_TYPE: 190,
+    COL_DECK: 160,
+}
+LAYOUT_KEY = "lichessStudyImport"  # window size and columns, kept in the Anki profile
 
 
 def lichess_error_text(e: LichessError) -> str:
@@ -76,16 +97,70 @@ def write_config(config: dict) -> None:
     mw.addonManager.writeConfig(__name__, config)
 
 
+# --- Layout shared with the Chess.com dialog ---
+
+
+def restore_layout(dialog: QDialog, table: QTableWidget, key: str, size: tuple[int, int]):
+    """
+    Maximize button, columns resized by dragging (the last one fills the width) and
+    hidden or shown from the header's context menu; all kept from the last time.
+    """
+    dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint)
+    restoreGeom(dialog, key, default_size=size)
+
+    table.setWordWrap(False)
+    table.verticalHeader().setVisible(False)
+    header = table.horizontalHeader()
+    header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+    header.setStretchLastSection(True)
+    header.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+    header.customContextMenuRequested.connect(lambda pos: _column_menu(table, pos))
+    restoreHeader(header, key)
+
+
+def save_layout(dialog: QDialog, table: QTableWidget, key: str):
+    saveGeom(dialog, key)
+    saveHeader(table.horizontalHeader(), key)
+
+
+def _column_menu(table: QTableWidget, pos):
+    header = table.horizontalHeader()
+    menu = QMenu(table)
+    for col in range(1, table.columnCount()):  # the check column always stays
+        action = menu.addAction(table.horizontalHeaderItem(col).text())
+        action.setCheckable(True)
+        action.setChecked(not header.isSectionHidden(col))
+        action.toggled.connect(lambda shown, c=col: header.setSectionHidden(c, not shown))
+    menu.exec(header.mapToGlobal(pos))
+
+
+def readonly_item(text: str, tip: str = "") -> QTableWidgetItem:
+    item = QTableWidgetItem(text)
+    item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+    if tip:
+        item.setToolTip(tip)
+    return item
+
+
 class StudyImportDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent or mw)
         self.setWindowTitle(tr("dialog.title"))
-        self.resize(900, 620)
         self.config = get_config()
         self.chapters: list[Chapter] = []
         self.kinds: list[str] = []
         self._openings: dict[int, str | None] = {}  # row -> catalog opening name
         self.study_fallback = ""  # deck name for PGNs without StudyName: the file name
+        self._spreading = False  # a change being copied to the other selected rows
+
+        # Flipped/Study note types are cloned from the base one; the root deck and the
+        # base are config settings (deck_root, base_note_type), not asked every time
+        self.base = anki_ops.default_base(self.config.get("base_note_type", ""))
+        self.root = decks.root_name(self.config.get("deck_root"))
+        # Note types a chapter can use: (name, mode, exists)
+        self.choices = anki_ops.note_type_choices(self.base) if self.base else []
+        self.choice_modes = {name: mode for name, mode, _ in self.choices}
+        base_name = self.base["name"] if self.base else "AnkiChess"
 
         layout = QVBoxLayout(self)
 
@@ -94,26 +169,36 @@ class StudyImportDialog(QDialog):
         self.url_edit = QLineEdit()
         self.url_edit.setPlaceholderText(tr("source.url_placeholder"))
         self.url_edit.returnPressed.connect(self.on_load_url)
-        btn_url = QPushButton(tr("source.load_url"))
-        btn_url.clicked.connect(self.on_load_url)
+        self.url_btn = QPushButton(tr("source.load_url"))
+        self.url_btn.clicked.connect(self.on_load_url)
         btn_file = QPushButton(tr("source.open_file"))
         btn_file.clicked.connect(self.on_open_file)
+        self.token_btn = QPushButton(tr("token.show"))
+        self.token_btn.setFlat(True)
+        self.token_btn.setToolTip(tr("token.tooltip"))
+        self.token_btn.clicked.connect(lambda: self.show_token(True))
         src.addWidget(self.url_edit, 1)
-        src.addWidget(btn_url)
+        src.addWidget(self.url_btn)
         src.addWidget(btn_file)
+        src.addWidget(self.token_btn)
         layout.addLayout(src)
 
-        token_row = QHBoxLayout()
+        # Only needed for private studies: hidden until asked for, or a token is saved
+        self.token_row = QWidget()
+        token_layout = QHBoxLayout(self.token_row)
+        token_layout.setContentsMargins(0, 0, 0, 0)
         self.token_edit = QLineEdit(self.config.get("lichess_token", ""))
         self.token_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.token_edit.setPlaceholderText(tr("token.placeholder"))
         self.token_edit.setToolTip(tr("token.tooltip"))
-        token_row.addWidget(QLabel(tr("token.label")))
-        token_row.addWidget(self.token_edit, 1)
-        layout.addLayout(token_row)
+        token_layout.addWidget(QLabel(tr("token.label")))
+        token_layout.addWidget(self.token_edit, 1)
+        layout.addWidget(self.token_row)
+        self.show_token(bool(self.token_edit.text()))
 
         self.study_label = QLabel(tr("study.none"))
         self.study_label.setWordWrap(True)
+        self.study_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self.study_label)
 
         # --- Chapter table ---
@@ -143,29 +228,26 @@ class StudyImportDialog(QDialog):
                 tr("table.moves"),
             ]
         )
-        header = self.table.horizontalHeader()
-        for col in (COL_CHECK, COL_KIND, COL_SIDE, COL_NOTE_TYPE):
-            header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
-        for col in (COL_NAME, COL_DECK, COL_PREVIEW):
-            header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
-        self.table.verticalHeader().setVisible(False)
-        # Long decks keep both ends visible: the study and the section
-        self.table.setTextElideMode(Qt.TextElideMode.ElideMiddle)
+        for col, tip in (
+            (COL_KIND, tr("table.kind_tip")),
+            (COL_SIDE, tr("table.side_tip")),
+            (COL_NOTE_TYPE, tr("table.note_type_tip", base=base_name)),
+            (COL_DECK, tr("table.deck_tip")),
+        ):
+            self.table.horizontalHeaderItem(col).setToolTip(tip)
+        for col, width in COLUMN_WIDTHS.items():
+            self.table.setColumnWidth(col, width)
+        # Several rows (Ctrl/Shift+click) are changed together, see spread()
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
+        self.table.itemChanged.connect(self.on_item_changed)
+        self.table.cellDoubleClicked.connect(self.on_double_click)
         layout.addWidget(self.table, 1)
+        restore_layout(self, self.table, LAYOUT_KEY, (1100, 680))
 
-        self.hint = QLabel()
-        self.hint.setWordWrap(True)
-        layout.addWidget(self.hint)
-
-        # --- Destination ---
-        # Flipped/Study note types are cloned from the base one; the root deck and the
-        # base are config settings (deck_root, base_note_type), not asked every time
-        self.base = anki_ops.default_base(self.config.get("base_note_type", ""))
-        self.root = decks.root_name(self.config.get("deck_root"))
-        # Note types a chapter can use: (name, mode, exists)
-        self.choices = anki_ops.note_type_choices(self.base) if self.base else []
-        self.choice_modes = {name: mode for name, mode, _ in self.choices}
-        self.hint.setText(tr("modes.hint", base=self.base["name"] if self.base else "AnkiChess"))
+        hint = QLabel(tr("table.hint"))
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
 
         self.update_existing = QCheckBox(tr("form.update_existing"))
         self.update_existing.setChecked(bool(self.config.get("update_existing", False)))
@@ -185,6 +267,14 @@ class StudyImportDialog(QDialog):
 
         if not self.base:
             self.study_label.setText(tr("warn.no_note_types"))
+
+    def done(self, result: int):
+        save_layout(self, self.table, LAYOUT_KEY)
+        super().done(result)
+
+    def show_token(self, visible: bool):
+        self.token_row.setVisible(visible)
+        self.token_btn.setVisible(not visible)
 
     # --- Loading ---
 
@@ -214,12 +304,16 @@ class StudyImportDialog(QDialog):
         study_id, chapter_id = parsed
         token = self.token_edit.text()
         self.study_label.setText(tr("study.downloading"))
+        self.url_btn.setEnabled(False)
 
         def on_done(fut):
+            self.url_btn.setEnabled(True)
             try:
                 text = fut.result()
             except LichessError as e:
                 self.study_label.setText(tr("study.download_failed"))
+                if e.key == "error.no_access":
+                    self.show_token(True)  # private study: the token is the way in
                 showWarning(lichess_error_text(e), parent=self)
                 return
             self.load_pgn(text, f"lichess.org/study/{study_id}")
@@ -236,79 +330,110 @@ class StudyImportDialog(QDialog):
             showWarning(tr("warn.no_chapters"), parent=self)
             return
 
-        study = next((c.study_name for c in self.chapters if c.study_name), "") or source
-        counts = {k: self.kinds.count(k) for k in KIND_KEYS}
-        self.study_label.setText(
-            tr(
-                "study.summary",
-                study=study,
-                total=len(self.chapters),
-                exercises=counts[KIND_EXERCISE],
-                lines=counts[KIND_LINE],
-                games=counts[KIND_GAME],
-                empty=counts[KIND_EMPTY],
-            )
-        )
         self._openings = {}
         self.study_fallback = os.path.splitext(source)[0]
+        study = next((c.study_name for c in self.chapters if c.study_name), "") or source
+        counts = {k: self.kinds.count(k) for k in KIND_KEYS}
+        summary = tr(
+            "study.summary",
+            study=study,
+            total=len(self.chapters),
+            exercises=counts[KIND_EXERCISE],
+            lines=counts[KIND_LINE],
+            games=counts[KIND_GAME],
+            empty=counts[KIND_EMPTY],
+        )
+        study_deck = decks.study_deck(self.chapters[0], self.root, self.study_fallback)
+        self.study_label.setText(f"{summary}<br>{tr('study.deck', deck=study_deck)}")
         self.populate_table()
 
     def populate_table(self):
-        self.table.setRowCount(len(self.chapters))
         include_games = self.include_games.isChecked()
+        self.table.blockSignals(True)
+        self.table.setRowCount(0)  # drops the combos of the previous study
+        self.table.setRowCount(len(self.chapters))
         for row, ch in enumerate(self.chapters):
             kind = self.kinds[row]
             check = QTableWidgetItem()
             flags = Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled
             if kind == KIND_EMPTY:
                 flags = Qt.ItemFlag.NoItemFlags
-            check.setFlags(flags)
+            check.setFlags(flags | Qt.ItemFlag.ItemIsSelectable)
             checked = kind in (KIND_EXERCISE, KIND_LINE) or (kind == KIND_GAME and include_games)
             check.setCheckState(Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
             self.table.setItem(row, COL_CHECK, check)
 
-            for col, value in (
-                (COL_NAME, ch.name),
-                (COL_DECK, ""),
-                (COL_PREVIEW, ch.preview),
-            ):
-                item = QTableWidgetItem(value)
-                item.setFlags(Qt.ItemFlag.ItemIsEnabled)
-                if col == COL_NAME and ch.chapter_url:
-                    item.setToolTip(ch.chapter_url)
-                self.table.setItem(row, col, item)
+            name_tip = "\n".join(filter(None, [ch.name, ch.chapter_url, ch.chapter_url and tr("table.open_tip")]))
+            self.table.setItem(row, COL_NAME, readonly_item(ch.name, name_tip))
+            self.table.setItem(row, COL_DECK, readonly_item(""))
+            moves = textwrap.fill(ch.moves_preview(600), 80)
+            self.table.setItem(row, COL_PREVIEW, readonly_item(ch.moves_preview(200), moves))
 
             if kind == KIND_EMPTY:
-                item = QTableWidgetItem(tr(KIND_KEYS[kind]))
-                item.setFlags(Qt.ItemFlag.NoItemFlags)
-                self.table.setItem(row, COL_KIND, item)
-            else:
-                kind_combo = QComboBox()
-                for key in CHAPTER_KINDS:
-                    kind_combo.addItem(tr(KIND_KEYS[key]), key)
-                kind_combo.setCurrentIndex(CHAPTER_KINDS.index(kind))
-                kind_combo.currentIndexChanged.connect(lambda _, r=row: self.refresh_deck(r))
-                self.table.setCellWidget(row, COL_KIND, kind_combo)
+                # Nothing to import: plain text instead of combos
+                for col, text in ((COL_KIND, tr(KIND_KEYS[kind])), (COL_SIDE, "—"), (COL_NOTE_TYPE, "—")):
+                    item = QTableWidgetItem(text)
+                    item.setFlags(Qt.ItemFlag.NoItemFlags)
+                    self.table.setItem(row, col, item)
+                continue
+
+            kind_combo = QComboBox()
+            for key in CHAPTER_KINDS:
+                kind_combo.addItem(tr(KIND_KEYS[key]), key)
+            kind_combo.setCurrentIndex(CHAPTER_KINDS.index(kind))
+            kind_combo.currentIndexChanged.connect(lambda _, r=row: self.on_kind_changed(r))
+            self.table.setCellWidget(row, COL_KIND, kind_combo)
 
             side_combo = QComboBox()
             for side, label_key in SIDES:
                 side_combo.addItem(tr(label_key), side)
             side_combo.setCurrentIndex([s for s, _ in SIDES].index(ch.player))
             side_combo.setToolTip(tr("side.tooltip", side=tr(f"side.to_move.{ch.side_to_move}")))
-            side_combo.setEnabled(kind != KIND_EMPTY)
             side_combo.currentIndexChanged.connect(lambda _, r=row: self.on_side_changed(r))
             self.table.setCellWidget(row, COL_SIDE, side_combo)
 
             note_type_combo = QComboBox()
-            note_type_combo.setEnabled(kind != KIND_EMPTY)
             note_type_combo.currentIndexChanged.connect(
                 lambda _, r=row: self.on_note_type_changed(r)
             )
             self.table.setCellWidget(row, COL_NOTE_TYPE, note_type_combo)
             self.fill_note_types(row)
+        self.table.blockSignals(False)
 
         self.refresh_decks()
-        self.import_btn.setEnabled(self.base is not None)
+        self.update_import_button()
+
+    # --- Several rows at once ---
+
+    def spread(self, row: int, col: int):
+        """
+        Copy a combo change to the other selected rows (Ctrl/Shift+click on the chapter
+        names selects several; the combos don't change the selection).
+        """
+        if self._spreading:
+            return
+        rows = {index.row() for index in self.table.selectionModel().selectedRows()}
+        if row not in rows or len(rows) < 2:
+            return
+        self._spreading = True
+        try:
+            # Same list in every row, so the same index means the same choice
+            index = self.table.cellWidget(row, col).currentIndex()
+            for other in rows - {row}:
+                combo = self.table.cellWidget(other, col)
+                if combo:
+                    combo.setCurrentIndex(index)
+        finally:
+            self._spreading = False
+
+    def on_item_changed(self, item: QTableWidgetItem):
+        if item.column() == COL_CHECK:
+            self.update_import_button()
+
+    def on_double_click(self, row: int, col: int):
+        url = self.chapters[row].chapter_url if row < len(self.chapters) else ""
+        if col == COL_NAME and url:
+            openLink(url)
 
     # --- Side and note type ---
 
@@ -326,9 +451,9 @@ class StudyImportDialog(QDialog):
             if not exists:
                 combo.setItemData(combo.count() - 1, tr("note_type.new_tip"), Qt.ItemDataRole.ToolTipRole)
         combo.blockSignals(False)
-        self.on_side_changed(row)
+        self.select_note_type_for_side(row)
 
-    def on_side_changed(self, row: int):
+    def select_note_type_for_side(self, row: int):
         """Puzzle when you make the first move, Flipped when the opponent does, Study for both."""
         mode = mode_for(self.row_side(row), self.chapters[row].side_to_move)
         combo = self.table.cellWidget(row, COL_NOTE_TYPE)
@@ -337,23 +462,31 @@ class StudyImportDialog(QDialog):
         combo.setCurrentIndex(index)
         combo.blockSignals(False)
 
+    def on_side_changed(self, row: int):
+        self.select_note_type_for_side(row)
+        self.spread(row, COL_SIDE)
+
     def on_note_type_changed(self, row: int):
         """Show the side a note type makes you play, without changing the note type back."""
         mode = self.choice_modes.get(self.table.cellWidget(row, COL_NOTE_TYPE).currentData())
-        if not mode:
-            return
-        stm = self.chapters[row].side_to_move
-        side = None if mode == MODE_STUDY else OTHER_SIDE[stm] if mode == MODE_FLIPPED else stm
-        side_combo = self.table.cellWidget(row, COL_SIDE)
-        side_combo.blockSignals(True)
-        side_combo.setCurrentIndex([s for s, _ in SIDES].index(side))
-        side_combo.blockSignals(False)
+        if mode:
+            stm = self.chapters[row].side_to_move
+            side = None if mode == MODE_STUDY else OTHER_SIDE[stm] if mode == MODE_FLIPPED else stm
+            side_combo = self.table.cellWidget(row, COL_SIDE)
+            side_combo.blockSignals(True)
+            side_combo.setCurrentIndex([s for s, _ in SIDES].index(side))
+            side_combo.blockSignals(False)
+        self.spread(row, COL_NOTE_TYPE)
 
     # --- Decks ---
 
     def row_kind(self, row: int) -> str:
         combo = self.table.cellWidget(row, COL_KIND)
         return combo.currentData() if combo else KIND_EMPTY
+
+    def on_kind_changed(self, row: int):
+        self.refresh_deck(row)
+        self.spread(row, COL_KIND)
 
     def placement(self, row: int) -> decks.Placement:
         kind = self.row_kind(row)
@@ -372,7 +505,8 @@ class StudyImportDialog(QDialog):
             return
         placement = self.placement(row)
         item = self.table.item(row, COL_DECK)
-        item.setText(placement.deck)
+        # The study deck is shown above the table: the cell keeps the subdeck
+        item.setText(placement.deck.rsplit("::", 1)[-1])
         item.setToolTip("\n".join([placement.deck, *placement.tags]))
 
     def refresh_decks(self):
@@ -398,17 +532,29 @@ class StudyImportDialog(QDialog):
     def on_toggle_games(self, checked: bool):
         self.set_checked(KIND_GAME, checked)
 
+    def checked_rows(self) -> list[int]:
+        return [
+            row
+            for row in range(len(self.chapters))
+            if self.row_kind(row) != KIND_EMPTY
+            and self.table.item(row, COL_CHECK).checkState() == Qt.CheckState.Checked
+        ]
+
+    def update_import_button(self):
+        count = len(self.checked_rows())
+        self.import_btn.setText(tr("button.import_count", count=count) if count else tr("button.import"))
+        self.import_btn.setEnabled(bool(count) and self.base is not None)
+
     def selected_rows(self) -> list[tuple[Chapter, str, decks.Placement]]:
         """(chapter, note type name, placement) of the checked chapters."""
-        rows = []
-        for row, ch in enumerate(self.chapters):
-            if self.row_kind(row) == KIND_EMPTY:
-                continue
-            if self.table.item(row, COL_CHECK).checkState() != Qt.CheckState.Checked:
-                continue
-            name = self.table.cellWidget(row, COL_NOTE_TYPE).currentData()
-            rows.append((ch, name, self.placement(row)))
-        return rows
+        return [
+            (
+                self.chapters[row],
+                self.table.cellWidget(row, COL_NOTE_TYPE).currentData(),
+                self.placement(row),
+            )
+            for row in self.checked_rows()
+        ]
 
     # --- Import ---
 

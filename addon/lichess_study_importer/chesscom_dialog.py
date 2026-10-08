@@ -19,7 +19,6 @@ from aqt.qt import (
     QFormLayout,
     QGridLayout,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QPlainTextEdit,
@@ -33,11 +32,13 @@ from aqt.utils import askUser, showWarning, tooltip
 
 from . import anki_ops, chesscom, decks, engine
 from .chess_lib import chess
-from .dialog import apply_language, get_config, write_config
+from .dialog import apply_language, get_config, restore_layout, save_layout, write_config
 from .game_analysis import ALL_KINDS, DEFAULT_KINDS, ENGINE_KINDS, AnalysisOptions, analyze_game
 from .i18n import tr
 
 COL_CHECK, COL_MOVE, COL_KIND, COL_SOLUTION, COL_EVAL, COL_DECK = range(6)
+COLUMN_WIDTHS = {COL_CHECK: 28, COL_MOVE: 150, COL_KIND: 130, COL_SOLUTION: 260, COL_EVAL: 110}
+LAYOUT_KEY = "chesscomImport"  # window size and columns, kept in the Anki profile
 
 
 def error_text(e: Exception) -> str:
@@ -68,7 +69,6 @@ class ChessComImportDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent or mw)
         self.setWindowTitle(tr("cc.title"))
-        self.resize(940, 700)
         self.config = get_config()
         self.game: chess.pgn.Game | None = None
         self.cards = []
@@ -148,13 +148,10 @@ class ChessComImportDialog(QDialog):
                 tr("table.deck"),
             ]
         )
-        header = self.table.horizontalHeader()
-        for col in (COL_CHECK, COL_MOVE, COL_KIND, COL_EVAL):
-            header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
-        for col in (COL_SOLUTION, COL_DECK):
-            header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
-        self.table.verticalHeader().setVisible(False)
+        for col, width in COLUMN_WIDTHS.items():
+            self.table.setColumnWidth(col, width)
         layout.addWidget(self.table, 1)
+        restore_layout(self, self.table, LAYOUT_KEY, (1100, 720))
 
         # --- Destination ---
         # Root deck and base note type are config settings (deck_root, base_note_type)
@@ -178,6 +175,10 @@ class ChessComImportDialog(QDialog):
         if not self.base:
             self.summary.setText(tr("warn.no_note_types"))
         self.refresh_engine_label()
+
+    def done(self, result: int):
+        save_layout(self, self.table, LAYOUT_KEY)
+        super().done(result)
 
     # --- Engine ---
 
@@ -360,7 +361,7 @@ class ChessComImportDialog(QDialog):
         for row, card in enumerate(self.cards):
             placement = self.placement(card)
             item = self.table.item(row, COL_DECK)
-            item.setText(placement.deck)
+            item.setText(placement.deck.removeprefix(f"{self.root}::"))
             item.setToolTip("\n".join([placement.deck, *placement.tags]))
 
     # --- Import ---

@@ -50,13 +50,28 @@ STRINGS: dict[str, dict[str, str]] = {
         "side.to_move.b": "Black",
         "note_type.new": "(new)",
         "note_type.new_tip": "Created on import from the base note type.",
-        "modes.hint": (
-            "<small><b>You play</b>: your side in the chapter, from its orientation on Lichess "
-            "(guessed for exported files). The note type follows it: <b>{base}</b> when you make "
-            "the first move, <b>{base} Flipped</b> when the first move is the opponent's (played "
-            "automatically, the board turned to your side), <b>{base} Study</b> to play both "
-            "sides. Missing ones are created from {base}.</small>"
+        "table.kind_tip": "Decides the subdeck: opening lines, tactics or annotated games.",
+        "table.side_tip": (
+            "Your side in the chapter, from its orientation on Lichess (guessed for exported "
+            "files). Changing it picks the note type."
         ),
+        "table.note_type_tip": (
+            "{base}: you make the first move.\n"
+            "{base} Flipped: the first move is the opponent's, played automatically, with the "
+            "board turned to your side.\n"
+            "{base} Study: you play both sides.\n"
+            "Missing ones are created from {base}."
+        ),
+        "table.deck_tip": "Subdeck inside the study deck shown above. Hover a cell for the full deck and tags.",
+        "table.open_tip": "Double-click to open it on Lichess.",
+        "table.hint": (
+            "<small>Hover the column titles for help. Select several chapters (Ctrl/Shift+click "
+            "on the names) and change one of their lists to change them all. Drag the column "
+            "borders to resize them; right-click the titles to show or hide columns.</small>"
+        ),
+        "study.deck": "Deck: <b>{deck}</b>",
+        "token.show": "Private study?",
+        "button.import_count": "Import {count}",
         "table.deck": "Deck",
         "deck.root": "Chess",
         "deck.openings": "Openings",
@@ -209,13 +224,29 @@ STRINGS: dict[str, dict[str, str]] = {
         "side.to_move.b": "pretas",
         "note_type.new": "(novo)",
         "note_type.new_tip": "Criado na importação a partir do tipo de nota base.",
-        "modes.hint": (
-            "<small><b>Você joga</b>: o seu lado no capítulo, pela orientação do capítulo no "
-            "Lichess (estimado em arquivos exportados). O tipo de nota acompanha: <b>{base}</b> "
-            "quando o 1º lance é seu, <b>{base} Flipped</b> quando o 1º lance é do adversário "
-            "(jogado sozinho, com o tabuleiro virado para o seu lado), <b>{base} Study</b> para "
-            "jogar os dois lados. Os que não existem são criados a partir do {base}.</small>"
+        "table.kind_tip": "Decide o subdeck: linhas de abertura, táticas ou partidas comentadas.",
+        "table.side_tip": (
+            "O seu lado no capítulo, pela orientação do capítulo no Lichess (estimado em "
+            "arquivos exportados). Mudar o lado escolhe o tipo de nota."
         ),
+        "table.note_type_tip": (
+            "{base}: o 1º lance é seu.\n"
+            "{base} Flipped: o 1º lance é do adversário, jogado sozinho, com o tabuleiro "
+            "virado para o seu lado.\n"
+            "{base} Study: você joga os dois lados.\n"
+            "Os que não existem são criados a partir do {base}."
+        ),
+        "table.deck_tip": "Subdeck dentro do deck do estudo mostrado acima. Passe o mouse na célula para ver o deck completo e as tags.",
+        "table.open_tip": "Clique duas vezes para abrir no Lichess.",
+        "table.hint": (
+            "<small>Passe o mouse nos títulos das colunas para ver a ajuda. Selecione vários "
+            "capítulos (Ctrl/Shift+clique nos nomes) e mude uma das listas para mudar todos. "
+            "Arraste a borda das colunas para ajustar a largura; clique com o botão direito nos "
+            "títulos para mostrar ou esconder colunas.</small>"
+        ),
+        "study.deck": "Deck: <b>{deck}</b>",
+        "token.show": "Estudo privado?",
+        "button.import_count": "Importar {count}",
         "table.deck": "Deck",
         "deck.root": "Xadrez",
         "deck.openings": "Aberturas",

@@ -137,8 +137,12 @@ class Chapter:
 
     @property
     def preview(self) -> str:
+        return self.moves_preview(60)
+
+    def moves_preview(self, limit: int) -> str:
+        """Moves without comments, cut at limit characters."""
         text = " ".join(COMMENT_RE.sub(" ", self.movetext).split())
-        return text[:60] + ("…" if len(text) > 60 else "")
+        return text[:limit] + ("…" if len(text) > limit else "")
 
     def pgn(self, strip_anno: bool = True) -> str:
         header = "\n".join(f'[{k} "{escape_tag_value(v)}"]' for k, v in self.tags.items())
