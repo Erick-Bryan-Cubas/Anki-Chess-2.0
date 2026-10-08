@@ -1,12 +1,14 @@
 - **language**: interface language. `"en"` (default), `"pt-BR"`, or `"auto"` to follow Anki's interface language. The menu entry updates after restarting Anki; the dialog updates the next time it opens.
-- **deck_root**: root deck for everything imported. Empty = `Chess` (English) or `Xadrez` (pt-BR). Cards go to
-  `<root>::Openings::<family>` (opening lines, book moves, book lines; the variation becomes the tag
-  `opening::<family>::<variation>`), `<root>::Tactics::<study>`, `<root>::Annotated games::<study>` and
+- **deck_root**: root deck for everything imported (set here; the import windows don't ask for it).
+  Empty = `Chess` (English) or `Xadrez` (pt-BR). Each Lichess study goes to
+  `<root>::<study>::Opening lines`, `::Tactics` and `::Annotated games` (opening lines are tagged
+  `opening::<family>::<variation>`); Chess.com cards go to `<root>::Openings::<family>` and
   `<root>::My games::<error type>`. Re-importing with "update" moves older notes into this layout.
 - **include_games**: select full-game chapters (no FEN) by default.
 - **update_existing**: on re-import, update notes already imported instead of skipping them.
 - **strip_anno**: remove the `[%anno ...]` markers Lichess leaves in comments.
-- **base_note_type**: last base note type used (Flipped/Study note types are cloned from it).
+- **base_note_type**: note type the Flipped/Study ones are cloned from, when a chapter or card needs
+  one that doesn't exist yet. Empty = `AnkiChess`, or the first chess note type set up as a puzzle.
 - **lichess_token**: personal token (`study:read` scope) to download private studies. Stored as plain text.
 
 **Chess.com games** (`Tools > Import Chess.com game...`):

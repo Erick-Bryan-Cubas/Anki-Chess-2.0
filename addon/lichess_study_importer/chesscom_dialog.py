@@ -157,22 +157,12 @@ class ChessComImportDialog(QDialog):
         layout.addWidget(self.table, 1)
 
         # --- Destination ---
-        form = QFormLayout()
-        self.model_combo = QComboBox()
-        for m in anki_ops.find_chess_note_types():
-            self.model_combo.addItem(m["name"], m["id"])
-        idx = self.model_combo.findText(self.config.get("base_note_type", ""))
-        if idx >= 0:
-            self.model_combo.setCurrentIndex(idx)
-        form.addRow(tr("form.base_note_type"), self.model_combo)
-        self.root_edit = QLineEdit(decks.root_name(self.config.get("deck_root")))
-        self.root_edit.setToolTip(tr("form.deck_root_tip"))
-        self.root_edit.textChanged.connect(self.refresh_decks)
-        form.addRow(tr("form.deck_root"), self.root_edit)
+        # Root deck and base note type are config settings (deck_root, base_note_type)
+        self.base = anki_ops.default_base(self.config.get("base_note_type", ""))
+        self.root = decks.root_name(self.config.get("deck_root"))
         self.update_existing = QCheckBox(tr("form.update_existing"))
         self.update_existing.setChecked(bool(self.config.get("update_existing", False)))
-        form.addRow("", self.update_existing)
-        layout.addLayout(form)
+        layout.addWidget(self.update_existing)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -185,7 +175,7 @@ class ChessComImportDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-        if self.model_combo.count() == 0:
+        if not self.base:
             self.summary.setText(tr("warn.no_note_types"))
         self.refresh_engine_label()
 
@@ -359,12 +349,12 @@ class ChessComImportDialog(QDialog):
                 item.setToolTip(card.name)
                 self.table.setItem(row, col, item)
         self.refresh_decks()
-        self.import_btn.setEnabled(bool(self.cards) and self.model_combo.count() > 0)
+        self.import_btn.setEnabled(bool(self.cards) and self.base is not None)
         if not self.cards:
             tooltip(tr("cc.no_cards"), parent=self)
 
     def placement(self, card) -> decks.Placement:
-        return decks.place_game_card(card, decks.root_name(self.root_edit.text()))
+        return decks.place_game_card(card, self.root)
 
     def refresh_decks(self):
         for row, card in enumerate(self.cards):
@@ -384,7 +374,7 @@ class ChessComImportDialog(QDialog):
         if not selected:
             showWarning(tr("warn.no_selection"), parent=self)
             return
-        base = mw.col.models.get(self.model_combo.currentData())
+        base = self.base
         if not base:
             showWarning(tr("warn.base_missing"), parent=self)
             return
@@ -402,10 +392,8 @@ class ChessComImportDialog(QDialog):
         self.config.update(
             {
                 "chesscom_usernames": [u for u in usernames if u and u != "?"],
-                "deck_root": self.root_edit.text().strip(),
                 "chesscom_kinds": sorted(self.selected_kinds()),
                 "analysis_time": self.time_spin.value(),
-                "base_note_type": base["name"],
                 "update_existing": update_existing,
             }
         )

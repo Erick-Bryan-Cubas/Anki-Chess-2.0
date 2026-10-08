@@ -16,7 +16,6 @@ from aqt.qt import (
     QDialog,
     QDialogButtonBox,
     QFileDialog,
-    QFormLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -159,30 +158,18 @@ class StudyImportDialog(QDialog):
         layout.addWidget(self.hint)
 
         # --- Destination ---
-        form = QFormLayout()
-        self.model_combo = QComboBox()
-        for m in anki_ops.find_chess_note_types():
-            self.model_combo.addItem(m["name"], m["id"])
-        preferred = self.config.get("base_note_type", "")
-        idx = self.model_combo.findText(preferred) if preferred else -1
-        if idx >= 0:
-            self.model_combo.setCurrentIndex(idx)
-        self.model_combo.currentIndexChanged.connect(self.on_base_changed)
-        form.addRow(tr("form.base_note_type"), self.model_combo)
+        # Flipped/Study note types are cloned from the base one; the root deck and the
+        # base are config settings (deck_root, base_note_type), not asked every time
+        self.base = anki_ops.default_base(self.config.get("base_note_type", ""))
+        self.root = decks.root_name(self.config.get("deck_root"))
         # Note types a chapter can use: (name, mode, exists)
-        self.choices: list[tuple[str, str, bool]] = []
-        self.choice_modes: dict[str, str] = {}
-        self.update_choices()
-
-        self.root_edit = QLineEdit(decks.root_name(self.config.get("deck_root")))
-        self.root_edit.setToolTip(tr("form.deck_root_tip"))
-        self.root_edit.textChanged.connect(self.refresh_decks)
-        form.addRow(tr("form.deck_root"), self.root_edit)
+        self.choices = anki_ops.note_type_choices(self.base) if self.base else []
+        self.choice_modes = {name: mode for name, mode, _ in self.choices}
+        self.hint.setText(tr("modes.hint", base=self.base["name"] if self.base else "AnkiChess"))
 
         self.update_existing = QCheckBox(tr("form.update_existing"))
         self.update_existing.setChecked(bool(self.config.get("update_existing", False)))
-        form.addRow("", self.update_existing)
-        layout.addLayout(form)
+        layout.addWidget(self.update_existing)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -196,7 +183,7 @@ class StudyImportDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-        if self.model_combo.count() == 0:
+        if not self.base:
             self.study_label.setText(tr("warn.no_note_types"))
 
     # --- Loading ---
@@ -321,20 +308,9 @@ class StudyImportDialog(QDialog):
             self.fill_note_types(row)
 
         self.refresh_decks()
-        self.import_btn.setEnabled(self.model_combo.count() > 0)
+        self.import_btn.setEnabled(self.base is not None)
 
     # --- Side and note type ---
-
-    def update_choices(self):
-        base = mw.col.models.get(self.model_combo.currentData()) if self.model_combo.count() else None
-        self.choices = anki_ops.note_type_choices(base) if base else []
-        self.choice_modes = {name: mode for name, mode, _ in self.choices}
-        self.hint.setText(tr("modes.hint", base=base["name"] if base else "AnkiChess"))
-
-    def on_base_changed(self):
-        self.update_choices()
-        for row in range(len(self.chapters)):
-            self.fill_note_types(row)
 
     def row_side(self, row: int) -> str | None:
         return self.table.cellWidget(row, COL_SIDE).currentData()
@@ -385,7 +361,7 @@ class StudyImportDialog(QDialog):
             self._openings[row] = decks.chapter_opening(self.chapters[row])
         return decks.place_chapter(
             self.chapters[row],
-            decks.root_name(self.root_edit.text()),
+            self.root,
             kind=kind,
             opening=self._openings.get(row),
             fallback_study=self.study_fallback,
@@ -396,9 +372,7 @@ class StudyImportDialog(QDialog):
             return
         placement = self.placement(row)
         item = self.table.item(row, COL_DECK)
-        # The root is in the field below: show the deck from the study on
-        root = decks.root_name(self.root_edit.text())
-        item.setText(placement.deck.removeprefix(f"{root}::"))
+        item.setText(placement.deck)
         item.setToolTip("\n".join([placement.deck, *placement.tags]))
 
     def refresh_decks(self):
@@ -443,7 +417,7 @@ class StudyImportDialog(QDialog):
         if not selected:
             showWarning(tr("warn.no_selection"), parent=self)
             return
-        base = mw.col.models.get(self.model_combo.currentData())
+        base = self.base
         if not base:
             showWarning(tr("warn.base_missing"), parent=self)
             return
@@ -468,9 +442,7 @@ class StudyImportDialog(QDialog):
             {
                 "include_games": self.include_games.isChecked(),
                 "update_existing": update_existing,
-                "base_note_type": base["name"],
                 "lichess_token": self.token_edit.text().strip(),
-                "deck_root": self.root_edit.text().strip(),
             }
         )
         write_config(self.config)

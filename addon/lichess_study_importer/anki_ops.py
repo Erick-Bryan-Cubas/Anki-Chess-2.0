@@ -87,6 +87,20 @@ def note_type_mode(m: dict) -> str:
     return MODE_PUZZLE
 
 
+def default_base(preferred: str = "") -> dict | None:
+    """
+    Note type the Flipped/Study ones are cloned from: base_note_type from the config,
+    else AnkiChess, else the first chess note type set up as a puzzle.
+    """
+    types = find_chess_note_types()
+    by_name = {m["name"]: m for m in types}
+    for name in (preferred, "AnkiChess"):
+        if name in by_name:
+            return by_name[name]
+    puzzles = [m for m in types if note_type_mode(m) == MODE_PUZZLE]
+    return (puzzles or types or [None])[0]
+
+
 def note_type_choices(base: dict) -> list[tuple[str, str, bool]]:
     """
     (name, mode, exists) for the note types a chapter can use: the Puzzle/Flipped/Study
