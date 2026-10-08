@@ -23,6 +23,7 @@ from .openings import follow_book, load_book
 from .pgn_split import KIND_EXERCISE, KIND_GAME, KIND_LINE, Chapter
 
 OPENING_KINDS = ("opening", "book", "book_line")  # game_analysis kinds filed by opening
+CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")  # dropped by Anki from deck names
 
 
 @dataclass
@@ -90,25 +91,46 @@ def suggest_kind(ch: Chapter) -> str:
     return ch.kind
 
 
+def clean_deck_name(name: str | None) -> str:
+    """
+    A deck name as Anki stores it: "::" separates the levels, spaces around each level
+    are trimmed and control characters dropped. Empty levels are dropped as well (Anki
+    would name them "blank"). Names ignore case, so "chess::x" is the deck "Chess::X".
+    """
+    parts = (CONTROL_CHARS.sub("", part).strip() for part in (name or "").split("::"))
+    return "::".join(part for part in parts if part)
+
+
+def section_name(kind: str) -> str:
+    """Default subdeck of a chapter kind inside its study deck."""
+    if kind == KIND_LINE:
+        return tr("deck.lines")
+    return tr("deck.games") if kind == KIND_GAME else tr("deck.tactics")
+
+
 def place_chapter(
     ch: Chapter,
     root: str,
     kind: str | None = None,
     opening: str | None = None,
     fallback_study: str = "",
+    deck: str | None = None,
+    subdeck: str | None = None,
 ) -> Placement:
     """
     One deck per study, split by chapter kind. kind overrides the suggested chapter
     kind; opening avoids parsing the chapter again; fallback_study names the study
-    when the PGN has no StudyName (e.g. the file name).
+    when the PGN has no StudyName (e.g. the file name). deck and subdeck replace the
+    study deck and the kind's subdeck (renamed in the dialog); an empty subdeck files
+    the chapter in the study deck itself.
     """
     kind = kind or suggest_kind(ch)
-    base = study_deck(ch, root, fallback_study)
+    base = clean_deck_name(deck) or study_deck(ch, root, fallback_study)
+    section = section_name(kind) if subdeck is None else subdeck
+    tags = []
     if kind == KIND_LINE:
         tags = opening_placement(root, opening if opening is not None else chapter_opening(ch)).tags
-        return Placement(f"{base}::{tr('deck.lines')}", tags)
-    section = tr("deck.games") if kind == KIND_GAME else tr("deck.tactics")
-    return Placement(f"{base}::{section}")
+    return Placement(clean_deck_name(f"{base}::{section}"), tags)
 
 
 def study_deck(ch: Chapter, root: str, fallback_study: str = "") -> str:

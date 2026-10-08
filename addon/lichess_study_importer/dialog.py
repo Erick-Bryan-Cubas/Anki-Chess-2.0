@@ -142,6 +142,17 @@ def readonly_item(text: str, tip: str = "") -> QTableWidgetItem:
     return item
 
 
+class DeckItem(QTableWidgetItem):
+    """Deck cell; an empty subdeck (the chapter goes to the study deck) says so when shown."""
+
+    def data(self, role):
+        value = super().data(role)
+        editable = self.flags() & Qt.ItemFlag.ItemIsEditable
+        if role == Qt.ItemDataRole.DisplayRole and not value and editable:
+            return tr("deck.study_itself")
+        return value
+
+
 class StudyImportDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent or mw)
@@ -152,6 +163,12 @@ class StudyImportDialog(QDialog):
         self._openings: dict[int, str | None] = {}  # row -> catalog opening name
         self.study_fallback = ""  # deck name for PGNs without StudyName: the file name
         self._spreading = False  # a change being copied to the other selected rows
+        # Deck names edited in the dialog, kept per study/chapter in the config so that
+        # importing the study again (e.g. to update it) keeps them
+        self.study_key: str | None = None
+        self.default_study_deck = ""
+        self.custom_subdecks: dict[int, str] = {}  # row -> subdeck typed in the Deck column
+        self._refreshing = False  # deck cells being filled by the dialog, not typed
 
         # Flipped/Study note types are cloned from the base one; the root deck and the
         # base are config settings (deck_root, base_note_type), not asked every time
@@ -200,6 +217,23 @@ class StudyImportDialog(QDialog):
         self.study_label.setWordWrap(True)
         self.study_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self.study_label)
+
+        # Study deck, editable once a study is loaded
+        self.deck_row = QWidget()
+        deck_layout = QHBoxLayout(self.deck_row)
+        deck_layout.setContentsMargins(0, 0, 0, 0)
+        self.deck_edit = QLineEdit()
+        self.deck_edit.setToolTip(tr("form.study_deck_tip"))
+        self.deck_edit.textEdited.connect(lambda _: self.refresh_decks())
+        self.deck_edit.editingFinished.connect(self.on_study_deck_edited)
+        deck_reset = QPushButton(tr("form.study_deck_reset"))
+        deck_reset.setToolTip(tr("form.study_deck_reset_tip"))
+        deck_reset.clicked.connect(self.reset_decks)
+        deck_layout.addWidget(QLabel(tr("form.study_deck")))
+        deck_layout.addWidget(self.deck_edit, 1)
+        deck_layout.addWidget(deck_reset)
+        layout.addWidget(self.deck_row)
+        self.deck_row.setVisible(False)
 
         # --- Chapter table ---
         filters = QHBoxLayout()
@@ -343,8 +377,20 @@ class StudyImportDialog(QDialog):
             games=counts[KIND_GAME],
             empty=counts[KIND_EMPTY],
         )
-        study_deck = decks.study_deck(self.chapters[0], self.root, self.study_fallback)
-        self.study_label.setText(f"{summary}<br>{tr('study.deck', deck=study_deck)}")
+        self.study_label.setText(summary)
+
+        # Deck names renamed the last time this study was imported
+        self.study_key = next((c.study_id for c in self.chapters if c.study_id), None)
+        self.default_study_deck = decks.study_deck(self.chapters[0], self.root, self.study_fallback)
+        saved = self.config.get("study_decks", {}).get(self.study_key) if self.study_key else None
+        self.deck_edit.setText(saved or self.default_study_deck)
+        self.deck_row.setVisible(True)
+        chapter_decks = self.config.get("chapter_decks", {})
+        self.custom_subdecks = {
+            row: chapter_decks[ch.dedupe_key]
+            for row, ch in enumerate(self.chapters)
+            if ch.dedupe_key in chapter_decks
+        }
         self.populate_table()
 
     def populate_table(self):
@@ -365,7 +411,12 @@ class StudyImportDialog(QDialog):
 
             name_tip = "\n".join(filter(None, [ch.name, ch.chapter_url, ch.chapter_url and tr("table.open_tip")]))
             self.table.setItem(row, COL_NAME, readonly_item(ch.name, name_tip))
-            self.table.setItem(row, COL_DECK, readonly_item(""))
+            deck_item = DeckItem("")
+            deck_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+            if kind != KIND_EMPTY:
+                # Renamed with a double-click or F2, see on_item_changed
+                deck_item.setFlags(deck_item.flags() | Qt.ItemFlag.ItemIsEditable)
+            self.table.setItem(row, COL_DECK, deck_item)
             moves = textwrap.fill(ch.moves_preview(600), 80)
             self.table.setItem(row, COL_PREVIEW, readonly_item(ch.moves_preview(200), moves))
 
@@ -429,6 +480,23 @@ class StudyImportDialog(QDialog):
     def on_item_changed(self, item: QTableWidgetItem):
         if item.column() == COL_CHECK:
             self.update_import_button()
+        elif item.column() == COL_DECK and not self._refreshing:
+            self.on_subdeck_edited(item.row(), item.data(Qt.ItemDataRole.EditRole) or "")
+
+    def on_subdeck_edited(self, row: int, text: str):
+        """A subdeck typed in the Deck column; the same name goes to the other selected rows."""
+        rows = {index.row() for index in self.table.selectionModel().selectedRows()}
+        if row not in rows:
+            rows = {row}
+        subdeck = decks.clean_deck_name(text)
+        for r in rows:
+            if self.row_kind(r) == KIND_EMPTY:
+                continue
+            if subdeck == decks.section_name(self.row_kind(r)):
+                self.custom_subdecks.pop(r, None)  # back to the default
+            else:
+                self.custom_subdecks[r] = subdeck
+            self.refresh_deck(r)
 
     def on_double_click(self, row: int, col: int):
         url = self.chapters[row].chapter_url if row < len(self.chapters) else ""
@@ -498,16 +566,39 @@ class StudyImportDialog(QDialog):
             kind=kind,
             opening=self._openings.get(row),
             fallback_study=self.study_fallback,
+            deck=self.study_deck(),
+            subdeck=self.custom_subdecks.get(row),
         )
+
+    def study_deck(self) -> str:
+        return decks.clean_deck_name(self.deck_edit.text()) or self.default_study_deck
+
+    def on_study_deck_edited(self):
+        """Show the name as Anki will store it (trimmed levels, no empty ones)."""
+        if self.deck_edit.text() != self.study_deck():
+            self.deck_edit.setText(self.study_deck())
+        self.refresh_decks()
+
+    def reset_decks(self):
+        """Back to the names from Lichess: the study deck and every subdeck."""
+        self.deck_edit.setText(self.default_study_deck)
+        self.custom_subdecks.clear()
+        self.refresh_decks()
 
     def refresh_deck(self, row: int):
         if self.row_kind(row) == KIND_EMPTY:
             return
         placement = self.placement(row)
         item = self.table.item(row, COL_DECK)
-        # The study deck is shown above the table: the cell keeps the subdeck
-        item.setText(placement.deck.rsplit("::", 1)[-1])
-        item.setToolTip("\n".join([placement.deck, *placement.tags]))
+        # The study deck is in the field above: the cell keeps the subdeck, empty when
+        # the chapter goes to the study deck itself
+        subdeck = self.custom_subdecks.get(row, decks.section_name(self.row_kind(row)))
+        self._refreshing = True
+        try:
+            item.setText(subdeck)
+            item.setToolTip("\n".join([placement.deck, *placement.tags]))
+        finally:
+            self._refreshing = False
 
     def refresh_decks(self):
         for row in range(len(self.chapters)):
@@ -558,6 +649,24 @@ class StudyImportDialog(QDialog):
 
     # --- Import ---
 
+    def renamed_decks(self) -> dict:
+        """Config entries keeping the deck names edited for this study (defaults removed)."""
+        study_decks = dict(self.config.get("study_decks", {}))
+        if self.study_key:
+            if self.study_deck() != self.default_study_deck:
+                study_decks[self.study_key] = self.study_deck()
+            else:
+                study_decks.pop(self.study_key, None)
+        chapter_decks = dict(self.config.get("chapter_decks", {}))
+        for row, ch in enumerate(self.chapters):
+            if not ch.dedupe_key:
+                continue
+            if row in self.custom_subdecks:
+                chapter_decks[ch.dedupe_key] = self.custom_subdecks[row]
+            else:
+                chapter_decks.pop(ch.dedupe_key, None)
+        return {"study_decks": study_decks, "chapter_decks": chapter_decks}
+
     def on_import(self):
         selected = self.selected_rows()
         if not selected:
@@ -589,6 +698,7 @@ class StudyImportDialog(QDialog):
                 "include_games": self.include_games.isChecked(),
                 "update_existing": update_existing,
                 "lichess_token": self.token_edit.text().strip(),
+                **self.renamed_decks(),
             }
         )
         write_config(self.config)
