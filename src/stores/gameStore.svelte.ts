@@ -223,6 +223,13 @@ export class GameStore {
     return /^(Puzzle|Study)$/.test(this.boardMode) && !this.hasNext;
   }
 
+  // Lichess gamebook chapter ([ChapterMode "gamebook"]): only the main line is the answer,
+  // variations are wrong moves with their explanation, and the opponent sticks to the main line
+  get isGamebook() {
+    const tags = this.rootGame?.tags as Record<string, unknown> | undefined;
+    return String(tags?.ChapterMode ?? '').toLowerCase() === 'gamebook';
+  }
+
   get puzzleScore() {
     /*
      * We track mistakes and blunders in puzzle and Study mode and Scores Puzzle.
