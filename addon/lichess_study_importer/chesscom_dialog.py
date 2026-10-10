@@ -1,6 +1,7 @@
 """
-Qt dialog: load a Chess.com game (exported analysis PGN or link), analyse it and
-import the resulting cards.
+Qt dialog: load a game (Chess.com analysis export or link, Lichess link, PGN), analyse
+it and import the resulting cards. Lichess games analysed on the server need no
+Stockfish: the analysis in their PGN gives the errors and the best moves.
 """
 
 from __future__ import annotations
@@ -21,7 +22,6 @@ from aqt.qt import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QPlainTextEdit,
     QPushButton,
     Qt,
     QTableWidget,
@@ -30,39 +30,30 @@ from aqt.qt import (
 )
 from aqt.utils import askUser, showWarning, tooltip
 
-from . import anki_ops, chesscom, decks, engine
+from . import anki_ops, chesscom, decks, engine, lichess_api
 from .chess_lib import chess
-from .dialog import apply_language, get_config, restore_layout, save_layout, write_config
-from .game_analysis import ALL_KINDS, DEFAULT_KINDS, ENGINE_KINDS, AnalysisOptions, analyze_game
+from .game_analysis import (
+    ALL_KINDS,
+    DEFAULT_KINDS,
+    ENGINE_KINDS,
+    AnalysisOptions,
+    analyze_game,
+    has_server_analysis,
+)
 from .i18n import tr
+from .ui_common import (
+    apply_language,
+    ask_pgn,
+    error_text,
+    get_config,
+    restore_layout,
+    save_layout,
+    write_config,
+)
 
 COL_CHECK, COL_MOVE, COL_KIND, COL_SOLUTION, COL_EVAL, COL_DECK = range(6)
 COLUMN_WIDTHS = {COL_CHECK: 28, COL_MOVE: 150, COL_KIND: 130, COL_SOLUTION: 260, COL_EVAL: 110}
 LAYOUT_KEY = "chesscomImport"  # window size and columns, kept in the Anki profile
-
-
-def error_text(e: Exception) -> str:
-    if isinstance(e, (chesscom.ChessComError, engine.EngineError)):
-        return tr(e.key, **e.params)
-    return str(e)
-
-
-class PasteDialog(QDialog):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.setWindowTitle(tr("cc.paste_title"))
-        self.resize(640, 420)
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel(tr("cc.paste_label")))
-        self.edit = QPlainTextEdit()
-        layout.addWidget(self.edit, 1)
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(tr("button.cancel"))
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
 
 
 class ChessComImportDialog(QDialog):
@@ -241,18 +232,25 @@ class ChessComImportDialog(QDialog):
             showWarning(tr("warn.read_file", error=e), parent=self)
 
     def on_paste(self):
-        dialog = PasteDialog(self)
-        if dialog.exec() and dialog.edit.toPlainText().strip():
-            self.load_pgn(dialog.edit.toPlainText())
+        text = ask_pgn(self)
+        if text:
+            self.load_pgn(text)
 
     def on_load_link(self):
-        parsed = chesscom.parse_game_url(self.url_edit.text())
-        if not parsed:
+        text = self.url_edit.text()
+        lichess_id = lichess_api.parse_game_url(text)
+        parsed = chesscom.parse_game_url(text)
+        token = self.config.get("lichess_token", "")
+        if lichess_id:
+            fetch = lambda col: lichess_api.fetch_game_pgn(lichess_id, token)  # noqa: E731
+        elif parsed:
+            fetch = lambda col: chesscom.fetch_game_pgn(*parsed)  # noqa: E731
+        else:
             showWarning(tr("chesscom.invalid_url"), parent=self)
             return
         QueryOp(
             parent=self,
-            op=lambda col: chesscom.fetch_game_pgn(*parsed),
+            op=fetch,
             success=self.load_pgn,
         ).failure(lambda e: showWarning(error_text(e), parent=self)).with_progress(
             tr("cc.loading")
@@ -266,7 +264,10 @@ class ChessComImportDialog(QDialog):
             return
         h = self.game.headers
         count = sum(chesscom.move_label(n) in chesscom.ERROR_LABELS for n in self.game.mainline())
-        labels = tr("cc.labels_found", count=count) if count else tr("cc.labels_missing")
+        if has_server_analysis(self.game):
+            labels = tr("cc.server_analysis", count=count)
+        else:
+            labels = tr("cc.labels_found", count=count) if count else tr("cc.labels_missing")
         self.summary.setText(
             tr(
                 "cc.summary",
@@ -300,7 +301,9 @@ class ChessComImportDialog(QDialog):
             return
         kinds = self.selected_kinds()
         path = self.engine_path()
-        if kinds & set(ENGINE_KINDS) and not path:
+        # Lichess server analysis: the errors and best moves come from the PGN
+        needs_engine = bool(kinds & set(ENGINE_KINDS)) and not has_server_analysis(self.game)
+        if needs_engine and not path:
             if askUser(tr("cc.engine_ask_download"), parent=self):
                 self.download_engine(then=self.on_analyze)
             return
@@ -321,7 +324,7 @@ class ChessComImportDialog(QDialog):
             )
 
         def task(col):
-            if not (kinds & set(ENGINE_KINDS)):
+            if not needs_engine:
                 return analyze_game(game, options)
             with engine.open_engine(path) as sf:
                 return analyze_game(game, options, sf, progress)
@@ -400,7 +403,7 @@ class ChessComImportDialog(QDialog):
         )
         write_config(self.config)
 
-        stats = {"created": 0, "updated": 0, "skipped": 0}
+        stats = {}
 
         def on_success(_changes):
             tooltip(tr("cc.result", **stats), parent=mw)

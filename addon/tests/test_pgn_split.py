@@ -134,7 +134,7 @@ def test_quotes_in_tag_values_are_kept_escaped():
     pgn = ch.pgn()
     assert '[ChapterName "\\"Let Me Introduce You\\" - Foreword"]' in pgn
     assert '[Annotator "a\\\\b"]' in pgn
-    assert p.split_games(pgn)[0].tags == ch.tags  # round trip
+    assert p.split_games(pgn)[0].tags == {**ch.tags, "AnkiChessId": ch.dedupe_key}  # round trip
 
 
 def test_malformed_comment_commands_are_dropped():

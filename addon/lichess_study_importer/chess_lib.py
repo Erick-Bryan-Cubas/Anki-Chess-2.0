@@ -18,3 +18,4 @@ except ImportError:
 
 import chess.engine  # noqa: E402,F401
 import chess.pgn  # noqa: E402,F401
+import chess.svg  # noqa: E402,F401
