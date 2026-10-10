@@ -8,15 +8,21 @@
   the subdeck of a chapter), by study and by chapter, so that importing the study again uses them.
   Filled by the window; remove an entry to go back to the default name.
 - **include_games**: select full-game chapters (no FEN) by default.
+- **split_lines**: one note per variation of the opening lines (each branch from the start to its end).
+- **key_moves**: besides each full game, a "find the move" note for every move marked ! or !!,
+  in the study's Key moves subdeck.
 - **update_existing**: on re-import, update notes already imported instead of skipping them.
 - **strip_anno**: remove the `[%anno ...]` markers Lichess leaves in comments.
 - **base_note_type**: note type the Flipped/Study ones are cloned from, when a chapter or card needs
   one that doesn't exist yet. Empty = `AnkiChess`, or the first chess note type set up as a puzzle.
-- **lichess_token**: personal token (`study:read` scope) to download private studies. Stored as plain text.
+- **lichess_token**: personal token to download private studies (`study:read` scope) and your puzzle
+  activity (`puzzle:read` scope). Stored as plain text.
+- **lichess_username**: last user whose studies were listed (`User's studies…`).
+- **puzzle_max** / **puzzle_failed_only**: how many of your latest puzzles to load, and only the failed ones.
 
-**Chess.com games** (`Tools > Import Chess.com game...`):
+**Games** (`Tools > Import game (Chess.com / Lichess)...`):
 
-- **chesscom_usernames**: your usernames; used to pick your side automatically.
+- **chesscom_usernames**: your Chess.com and Lichess usernames; used to pick your side automatically.
 - **chesscom_kinds**: card types selected last time (empty = default selection).
 - **analysis_time**: Stockfish seconds per move (the positions that become cards get 3x more).
 - **stockfish_path**: Stockfish executable. Empty = the one downloaded by the add-on (`user_files/stockfish`) or `stockfish` on the PATH.

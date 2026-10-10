@@ -11,9 +11,10 @@ import re
 from anki.collection import AddNoteRequest
 from aqt import mw
 
-from .i18n import tr
+from .i18n import STRINGS, tr
+from .note_info import chapter_details
 from .pgn_field import GLUED_BREAK_SEARCH, has_glued_breaks, show_line_breaks, space_line_breaks
-from .pgn_split import MODE_FLIPPED, MODE_PUZZLE, MODE_STUDY, Chapter
+from .pgn_split import CHAPTER_URL_RE, ID_TAG, MODE_FLIPPED, MODE_PUZZLE, MODE_STUDY, Chapter
 
 # Same markers used by the AnkiChess Companion add-on
 NOTE_TYPE_TAG = "ankiChessVersion"
@@ -163,28 +164,103 @@ def build_note_fields(ch: Chapter, strip_anno: bool) -> tuple[str, str]:
     parts = [f"<h3>{html.escape(ch.name)}</h3>"]
     if ch.study_name:
         parts.append(html.escape(ch.study_name))
+    parts += chapter_details(ch) if isinstance(ch, Chapter) else getattr(ch, "details", [])
     if ch.chapter_url:
         parts.append(f'<a href="{html.escape(ch.chapter_url)}">{html.escape(ch.link_label)}</a>')
     return pgn_field, "<br>".join(parts)
 
 
-def _find_existing(col, ch: Chapter) -> list[int]:
-    if not ch.dedupe_key:
+def _search_text(text: str) -> str:
+    """Text matched literally inside a quoted Anki search ("*", "_" are wildcards)."""
+    for char in ("\\", '"', "*", "_"):
+        text = text.replace(char, "\\" + char)
+    return text
+
+
+def find_existing(col, card) -> list[int]:
+    """Notes imported from a card, by the [AnkiChessId] written in their PGN."""
+    key = card.dedupe_key
+    if not key:
         return []
-    return list(col.find_notes(f'"PGN:*{ch.dedupe_key}*"'))
+    exact = col.find_notes(f'"PGN:*{ID_TAG} \\"{_search_text(key)}\\"*"')
+    if exact:
+        return list(exact)
+    # Notes imported before the id was written: the key is in the chapter URL. Notes
+    # with an id belong to another card (e.g. a variation of this chapter).
+    return list(col.find_notes(f'"PGN:*{_search_text(key)}*" -"PGN:*{ID_TAG}*"'))
+
+
+# Tags the importers write and replace when updating a note; other tags are kept
+MANAGED_TAG_ROOTS = {"lichess", "pgn", "chesscom", "eco"} | {
+    strings[key].lower() for strings in STRINGS.values() for key in ("tag.opening", "tag.study")
+}
+
+
+def is_managed_tag(tag: str) -> bool:
+    return tag.split("::")[0].lower() in MANAGED_TAG_ROOTS
+
+
+def merged_tags(current: list[str], new: list[str]) -> list[str]:
+    """The note's own tags, then the importer's (replacing the ones it wrote before)."""
+    tags = [t for t in current if not is_managed_tag(t)]
+    seen = {t.lower() for t in tags}  # Anki ignores case in tags
+    for tag in new:
+        if tag.lower() not in seen:
+            seen.add(tag.lower())
+            tags.append(tag)
+    return tags
+
+
+def _same_note(note, pgn_field: str, text_field: str, tags: list[str]) -> bool:
+    return (
+        note.fields[0] == pgn_field
+        and (len(note.fields) < 2 or note.fields[1] == text_field)
+        and {t.lower() for t in note.tags} == {t.lower() for t in tags}
+    )
+
+
+def card_status(col, card, strip_anno: bool) -> tuple[str, list[int]]:
+    """("new" | "same" | "changed", note ids): how a card compares to its notes."""
+    nids = find_existing(col, card)
+    if not nids:
+        return "new", []
+    pgn_field, text_field = build_note_fields(card, strip_anno)
+    for nid in nids:
+        note = col.get_note(nid)
+        if note.fields[0] != pgn_field or (len(note.fields) > 1 and note.fields[1] != text_field):
+            return "changed", nids
+    return "same", nids
+
+
+def removed_chapter_notes(col, study_id: str, chapter_ids: set[str]) -> list[int]:
+    """Notes of a study whose chapter is no longer in it."""
+    removed = []
+    for nid in col.find_notes(f'"tag:lichess::study::{_search_text(study_id)}"'):
+        m = CHAPTER_URL_RE.search(col.get_note(nid).fields[0])
+        if m and m.group(1) == study_id and m.group(2) not in chapter_ids:
+            removed.append(nid)
+    return removed
 
 
 def import_chapters(
-    col, rows, update_existing: bool, strip_anno: bool, stats: dict, undo_label: str = ""
+    col,
+    rows,
+    update_existing: bool,
+    strip_anno: bool,
+    stats: dict,
+    undo_label: str = "",
+    move_cards: bool = True,
 ):
     """
     rows: list of (card, note type dict, decks.Placement), where a card is a
-    pgn_split.Chapter or a game_analysis.GameCard. Runs inside a CollectionOp;
-    `stats` is filled with created/updated/skipped counts.
+    pgn_split.Chapter, a game_analysis.GameCard or a puzzles.PuzzleCard. Runs inside a
+    CollectionOp; `stats` is filled with created/updated/unchanged/skipped counts.
 
-    Updating also moves the note's cards to the card's deck, so re-importing with
-    "update" reorganises older imports into the current deck layout. Notes imported
-    before in another note type keep it, and are listed in stats["other_type"].
+    Updating replaces the importer's tags (the note's own tags stay) and, with
+    move_cards, moves the note's cards to the card's deck, so re-importing with
+    "update" reorganises older imports into the current deck layout. Notes that are
+    already up to date aren't rewritten. Notes imported before in another note type
+    keep it, and are listed in stats["other_type"].
     """
     undo_pos = col.add_custom_undo_entry(undo_label or tr("undo.import"))
     deck_ids: dict[str, int] = {}
@@ -194,13 +270,15 @@ def import_chapters(
             deck_ids[name] = col.decks.id(name)
         return deck_ids[name]
 
+    for key in ("created", "updated", "unchanged", "skipped"):
+        stats.setdefault(key, 0)
     to_add, to_update = [], []
     moves: dict[int, list[int]] = {}  # deck id -> card ids
     for ch, model, placement in rows:
         pgn_field, text_field = build_note_fields(ch, strip_anno)
         tags = [*ch.note_tags, *placement.tags]
 
-        existing = [col.get_note(nid) for nid in _find_existing(col, ch)]
+        existing = [col.get_note(nid) for nid in find_existing(col, ch)]
         if existing:
             # Changing the note type needs a full sync, so it is only reported:
             # stats["other_type"] = {chosen note type: [note ids]}
@@ -210,15 +288,21 @@ def import_chapters(
             if not update_existing:
                 stats["skipped"] += 1
                 continue
+            changed = False
             for note in existing:
-                note.fields[0] = pgn_field
-                if len(note.fields) > 1:
-                    note.fields[1] = text_field
-                for t in tags:
-                    note.add_tag(t)
-                to_update.append(note)
-                moves.setdefault(deck_id(placement.deck), []).extend(note.card_ids())
-            stats["updated"] += 1
+                new_tags = merged_tags(note.tags, tags)
+                if not _same_note(note, pgn_field, text_field, new_tags):
+                    note.fields[0] = pgn_field
+                    if len(note.fields) > 1:
+                        note.fields[1] = text_field
+                    note.tags = new_tags
+                    to_update.append(note)
+                    changed = True
+                if move_cards:
+                    did = deck_id(placement.deck)
+                    cids = col.db.list("select id from cards where nid = ? and did != ?", note.id, did)
+                    moves.setdefault(did, []).extend(cids)
+            stats["updated" if changed else "unchanged"] += 1
             continue
 
         note = col.new_note(model)
@@ -233,7 +317,8 @@ def import_chapters(
     # custom entry out of Anki's undo queue on large imports
     if to_update:
         col.update_notes(to_update)
-        for did, card_ids in moves.items():
+    for did, card_ids in moves.items():
+        if card_ids:
             col.set_deck(card_ids, did)
     if to_add:
         col.add_notes(to_add)

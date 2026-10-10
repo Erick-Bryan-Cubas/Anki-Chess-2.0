@@ -6,11 +6,13 @@ Pure Python (no aqt imports) so it can be unit tested outside Anki.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass, field
 
 TAG_RE = re.compile(r'^\s*\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]\s*$')
 COMMENT_RE = re.compile(r"\{[^}]*\}")
+VARIATION_RE = re.compile(r"\([^()]*\)")  # innermost variation
 CHAPTER_URL_RE = re.compile(r"/study/([A-Za-z0-9]{8})/([A-Za-z0-9]{8})")
 ANNO_RE = re.compile(r"\[%anno\b[^\]]*\]")
 EMPTY_COMMENT_RE = re.compile(r"\{\s*\}")
@@ -48,7 +50,10 @@ KIND_EXERCISE = "exercise"  # starts from a [FEN] position
 KIND_LINE = "line"  # from the start, no result: an opening line
 KIND_GAME = "game"  # from the start, with a result: an annotated game
 KIND_EMPTY = "empty"
+KIND_UNSUPPORTED = "unsupported"  # a chess variant the template can't play (Chess960...)
 FINISHED_RESULTS = ("1-0", "0-1", "1/2-1/2")
+SUPPORTED_VARIANTS = ("", "standard", "from position")
+ID_TAG = "AnkiChessId"  # written in every imported PGN, see Chapter.pgn()
 
 MODE_PUZZLE = "puzzle"
 MODE_FLIPPED = "flipped"
@@ -87,15 +92,30 @@ class Chapter:
     link_label = "Lichess"
 
     @property
+    def from_lichess(self) -> bool:
+        return bool(self.study_id) or "lichess.org" in self.tags.get("Site", "")
+
+    @property
     def dedupe_key(self) -> str | None:
-        """Text found in the PGN field of notes already imported from this chapter."""
+        """
+        Identifies the chapter's note, written in its PGN as [AnkiChessId]. Other PGNs
+        (ChessBase, pasted...) are keyed by the game itself: players, event, start
+        position and main line, so editing their comments still updates the same note.
+        """
+        if self.tags.get(ID_TAG):
+            return self.tags[ID_TAG]
         if self.study_id and self.chapter_id:
             return f"study/{self.study_id}/{self.chapter_id}"
-        return None
+        if not has_moves(self.movetext):
+            return None
+        parts = [self.tags.get(k, "") for k in ("Event", "Site", "Date", "Round", "White", "Black", "FEN")]
+        identity = "\n".join([*parts, mainline_text(self.movetext)])
+        return f"pgn/{hashlib.sha1(identity.encode()).hexdigest()[:12]}"
 
     @property
     def note_tags(self) -> list[str]:
-        tags = ["lichess", f"lichess::{self.kind}"]
+        source = "lichess" if self.from_lichess else "pgn"
+        tags = [source, f"{source}::{self.kind}"]
         if self.study_id:
             tags.append(f"lichess::study::{self.study_id}")
         return tags
@@ -110,7 +130,13 @@ class Chapter:
         return parts[1] if len(parts) > 1 and parts[1] in ("w", "b") else "w"
 
     @property
+    def variant(self) -> str:
+        return self.tags.get("Variant", "")
+
+    @property
     def kind(self) -> str:
+        if self.variant.lower() not in SUPPORTED_VARIANTS:
+            return KIND_UNSUPPORTED
         if not has_moves(self.movetext):
             return KIND_EMPTY
         if self.fen:
@@ -145,7 +171,10 @@ class Chapter:
         return text[:limit] + ("…" if len(text) > limit else "")
 
     def pgn(self, strip_anno: bool = True) -> str:
-        header = "\n".join(f'[{k} "{escape_tag_value(v)}"]' for k, v in self.tags.items())
+        tags = dict(self.tags)
+        if self.dedupe_key:
+            tags.setdefault(ID_TAG, self.dedupe_key)
+        header = "\n".join(f'[{k} "{escape_tag_value(v)}"]' for k, v in tags.items())
         body = drop_malformed_commands(self.movetext)
         body = sanitize(body) if strip_anno else body.strip()
         return f"{header}\n\n{body}\n"
@@ -172,6 +201,15 @@ def drop_malformed_commands(movetext: str) -> str:
 
 def has_moves(movetext: str) -> bool:
     return bool(SAN_RE.search(COMMENT_RE.sub(" ", movetext)))
+
+
+def mainline_text(movetext: str) -> str:
+    """Main line moves only (no comments, variations, NAGs or move numbers)."""
+    text = COMMENT_RE.sub(" ", movetext)
+    previous = None
+    while previous != text:  # nested variations, innermost first
+        previous, text = text, VARIATION_RE.sub(" ", text)
+    return " ".join(SAN_RE.findall(text))
 
 
 def sanitize(movetext: str) -> str:

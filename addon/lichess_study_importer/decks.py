@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import io
 import re
+import unicodedata
 from dataclasses import dataclass, field
 
 from .chess_lib import chess
@@ -23,6 +24,7 @@ from .openings import follow_book, load_book
 from .pgn_split import KIND_EXERCISE, KIND_GAME, KIND_LINE, Chapter
 
 OPENING_KINDS = ("opening", "book", "book_line")  # game_analysis kinds filed by opening
+KIND_KEY_MOVE = "key_move"  # "find the move" card made from an annotated game (expand.py)
 CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")  # dropped by Anki from deck names
 
 
@@ -42,9 +44,36 @@ def deck_part(text: str) -> str:
     return re.sub(r"\s*::\s*", ": ", text or "").strip(" :")
 
 
-def tag_part(text: str) -> str:
-    """One level of a hierarchical tag: no spaces or punctuation, lowercase."""
-    return re.sub(r"[^\w-]+", "_", text or "").strip("_").lower()
+def tag_part(text: str | None) -> str:
+    """
+    One level of a hierarchical tag ("::" separates the levels): spaces become "_",
+    as Anki tags can't have them. Quotes and "*" (search wildcards) and control
+    characters are dropped, and colons that would make a level ("::" inside the text,
+    ":" at its ends) become a single ":". Case is kept, though Anki ignores it.
+    """
+    text = re.sub(r'["*]', "", unicodedata.normalize("NFC", text or ""))
+    text = CONTROL_CHARS.sub("", re.sub(r"\s+", "_", text.strip()))
+    return re.sub(r":{2,}", ":", text).strip(":_")
+
+
+def opening_tags(opening: str | None) -> list[str]:
+    """<opening>::<family>::<variation>, e.g. opening::Slav_Defense::Czech_Variation."""
+    family, variation = split_opening(opening)
+    if not family:
+        return []
+    tag = f"{tr('tag.opening')}::{tag_part(family)}"
+    return [f"{tag}::{tag_part(variation)}" if variation else tag]
+
+
+def study_tag(study: str, chapter: str) -> str:
+    """<study>::<study name>::<chapter name>, e.g. estudo::#C105_-_Siciliana::Capítulo_1."""
+    return "::".join(filter(None, [tr("tag.study"), tag_part(study), tag_part(chapter)]))
+
+
+def lichess_opening(ch: Chapter) -> str | None:
+    """Opening name Lichess writes in the chapter ([Opening]), unless unknown ("?")."""
+    name = ch.tags.get("Opening", "").strip()
+    return name if name and name != "?" else None
 
 
 def split_opening(name: str | None) -> tuple[str | None, str | None]:
@@ -57,15 +86,17 @@ def split_opening(name: str | None) -> tuple[str | None, str | None]:
 
 
 def opening_placement(root: str, opening: str | None) -> Placement:
-    family, variation = split_opening(opening)
+    family, _ = split_opening(opening)
     deck = f"{root}::{tr('deck.openings')}::{deck_part(family) if family else tr('deck.other_openings')}"
-    tags = []
-    if family:
-        tag = f"{tr('tag.opening')}::{tag_part(family)}"
-        if variation:
-            tag += f"::{tag_part(variation)}"
-        tags.append(tag)
-    return Placement(deck, tags)
+    return Placement(deck, opening_tags(opening))
+
+
+def chapter_opening_name(ch: Chapter, kind: str) -> str | None:
+    """
+    Opening of a chapter for its tags: the one Lichess wrote, else, for opening lines,
+    the catalog name of the deepest book position of the main line.
+    """
+    return lichess_opening(ch) or (chapter_opening(ch) if kind == KIND_LINE else None)
 
 
 def chapter_opening(ch: Chapter) -> str | None:
@@ -105,6 +136,8 @@ def section_name(kind: str) -> str:
     """Default subdeck of a chapter kind inside its study deck."""
     if kind == KIND_LINE:
         return tr("deck.lines")
+    if kind == KIND_KEY_MOVE:
+        return tr("deck.key_moves")
     return tr("deck.games") if kind == KIND_GAME else tr("deck.tactics")
 
 
@@ -127,16 +160,33 @@ def place_chapter(
     kind = kind or suggest_kind(ch)
     base = clean_deck_name(deck) or study_deck(ch, root, fallback_study)
     section = section_name(kind) if subdeck is None else subdeck
-    tags = []
-    if kind == KIND_LINE:
-        tags = opening_placement(root, opening if opening is not None else chapter_opening(ch)).tags
-    return Placement(clean_deck_name(f"{base}::{section}"), tags)
+    return Placement(
+        clean_deck_name(f"{base}::{section}"),
+        chapter_tags(ch, kind, opening, fallback_study),
+    )
+
+
+def chapter_tags(ch: Chapter, kind: str, opening: str | None = None, fallback_study: str = "") -> list[str]:
+    """
+    Tags of a chapter's notes besides its source: the study and chapter names, the
+    opening and its ECO code. opening avoids looking it up again.
+    """
+    chapter = ch.name if ch.name != "?" else ""  # "?": no ChapterName nor Event
+    tags = [study_tag(study_name(ch, fallback_study), chapter)]
+    tags += opening_tags(opening if opening is not None else chapter_opening_name(ch, kind))
+    eco = ch.tags.get("ECO", "").strip()
+    if eco and eco != "?":
+        tags.append(f"eco::{tag_part(eco)}")
+    return tags
+
+
+def study_name(ch: Chapter, fallback_study: str = "") -> str:
+    return deck_part(ch.study_name) or deck_part(fallback_study) or tr("deck.unnamed_study")
 
 
 def study_deck(ch: Chapter, root: str, fallback_study: str = "") -> str:
     """<root>::<study>, the deck holding a Lichess study's chapters."""
-    study = deck_part(ch.study_name) or deck_part(fallback_study) or tr("deck.unnamed_study")
-    return f"{root}::{study}"
+    return f"{root}::{study_name(ch, fallback_study)}"
 
 
 def place_game_card(card, root: str) -> Placement:

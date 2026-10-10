@@ -73,8 +73,8 @@ def test_resolve_language(setting, anki_lang, expected):
 
 def test_translate_with_params_in_portuguese():
     i18n.set_language("pt-BR")
-    assert i18n.tr("result.summary", created=2, updated=1, skipped=0) == (
-        "Lichess: 2 criadas, 1 atualizadas, 0 já existentes puladas."
+    assert i18n.tr("result.summary", created=2, updated=1, unchanged=3, skipped=0) == (
+        "Lichess: 2 criadas, 1 atualizadas, 3 já em dia, 0 já existentes puladas."
     )
     i18n.set_language("xx")  # unknown -> English
     assert i18n.get_language() == "en"

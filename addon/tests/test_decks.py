@@ -36,10 +36,10 @@ def test_root_name():
 def test_opening_placement():
     p = decks.opening_placement("Xadrez", "Slav Defense: Czech Variation, Carlsbad Variation")
     assert p.deck == "Xadrez::Aberturas::Slav Defense"
-    assert p.tags == ["abertura::slav_defense::czech_variation"]
+    assert p.tags == ["abertura::Slav_Defense::Czech_Variation"]
     p = decks.opening_placement("Xadrez", "Queen's Gambit Declined")
     assert p.deck == "Xadrez::Aberturas::Queen's Gambit Declined"
-    assert p.tags == ["abertura::queen_s_gambit_declined"]
+    assert p.tags == ["abertura::Queen's_Gambit_Declined"]
     assert decks.opening_placement("Xadrez", None).deck == "Xadrez::Aberturas::Outras"
 
 
@@ -53,7 +53,10 @@ def test_lichess_chapters():
     line, game, exercise = split_games(text)
     # One deck per study, split by chapter kind
     assert decks.place_chapter(line, "Xadrez").deck == "Xadrez::O'Kelly: curso::Linhas de abertura"
-    assert decks.place_chapter(line, "Xadrez").tags == ["abertura::sicilian_defense::o_kelly_variation"]
+    assert decks.place_chapter(line, "Xadrez").tags == [
+        "estudo::O'Kelly:_curso::Linha",
+        "abertura::Sicilian_Defense::O'Kelly_Variation",
+    ]
     assert decks.place_chapter(game, "Xadrez").deck == "Xadrez::O'Kelly: curso::Partidas comentadas"
     assert decks.place_chapter(exercise, "Xadrez").deck == "Xadrez::O'Kelly: curso::Táticas"
     # The kind chosen in the dialog wins over the detected one
@@ -108,7 +111,7 @@ def test_chesscom_cards():
     # Each book line goes to the family of its own name, not of the game
     anti_moscow = placements["Linha de livro: Semi-Slav Defense: Anti-Moscow Gambit"]
     assert anti_moscow.deck == "Xadrez::Aberturas::Semi-Slav Defense"
-    assert anti_moscow.tags == ["abertura::semi-slav_defense::anti-moscow_gambit"]
+    assert anti_moscow.tags == ["abertura::Semi-Slav_Defense::Anti-Moscow_Gambit"]
 
     error = ga.GameCard(ga.KIND_BLUNDER, 36, "flipped", "", "", "", "k", [], "", "", "", "")
     assert decks.place_game_card(error, "Xadrez").deck == "Xadrez::Minhas partidas::Capivaradas"
