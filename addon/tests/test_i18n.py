@@ -26,7 +26,7 @@ def reset_language():
 def test_default_language_is_english():
     assert i18n.DEFAULT_LANGUAGE == "en"
     assert i18n.get_language() == "en"
-    assert i18n.tr("menu.import") == "Import Lichess study..."
+    assert i18n.tr("menu.import") == "Import into AnkiChess..."
 
 
 def test_languages_have_the_same_keys_and_placeholders():

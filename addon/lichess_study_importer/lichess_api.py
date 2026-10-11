@@ -127,6 +127,18 @@ def parse_game_url(text: str) -> str | None:
     return (m.group(1) or m.group(2)) if m else None
 
 
+def fetch_user_games(username: str, max_games: int = 30, token: str = "") -> list[dict]:
+    """A user's latest games, with their PGN (and server analysis when requested)."""
+    return _ndjson(
+        _get(
+            f"{API}/games/user/{username.strip()}?max={max_games}&pgnInJson=true&evals=true"
+            "&literate=true&opening=true&clocks=false",
+            token,
+            accept="application/x-ndjson",
+        )
+    )
+
+
 def fetch_game_pgn(game_id: str, token: str = "") -> str:
     """
     A game's PGN with the server analysis, when it was requested on Lichess: evals,

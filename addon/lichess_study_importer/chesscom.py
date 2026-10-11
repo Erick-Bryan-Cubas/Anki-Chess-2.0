@@ -104,6 +104,19 @@ def fetch_game_pgn(kind: str, game_id: str) -> str:
     raise ChessComError("chesscom.not_found")
 
 
+def fetch_recent_games(username: str, max_games: int = 30, months: int = 3) -> list[dict]:
+    """A player's latest games (most recent first), from the monthly public archives."""
+    archives = _get_json(
+        f"https://api.chess.com/pub/player/{username.strip().lower()}/games/archives"
+    ).get("archives", [])
+    games: list[dict] = []
+    for url in reversed(archives[-months:]):
+        games += reversed(_get_json(url).get("games", []))
+        if len(games) >= max_games:
+            break
+    return games[:max_games]
+
+
 def read_game(pgn_text: str) -> chess.pgn.Game:
     game = chess.pgn.read_game(io.StringIO(pgn_text))
     if game is None or game.errors or not game.variations:

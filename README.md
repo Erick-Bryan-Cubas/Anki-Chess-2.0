@@ -71,14 +71,14 @@ files generated in 'dist-anki'
 
 `addon/lichess_study_importer` is a separate Anki add-on that creates AnkiChess notes from Lichess studies, analysed games (Chess.com or Lichess) and Lichess puzzles.
 
-- Menus in `Tools` (also in the Companion's `AnkiChess` menu when installed): **Import Lichess study…**, **Update imported Lichess studies**, **Import game (Chess.com / Lichess)…** and **Import Lichess puzzles…**.
+- One window, `Tools > Import into AnkiChess…` (also in the Companion's `AnkiChess` menu when installed), with the **Lichess studies**, **Games** and **Lichess puzzles** tabs and the **Update imported Lichess studies** button. It keeps its size, and each table its columns; the pages stay open after importing.
 - Interface in English (default) or Brazilian Portuguese: set `"language"` to `"en"`, `"pt-BR"` or `"auto"` (follow Anki's language) in `Tools > Add-ons > Config`.
 
 ## Studies
 
-`Tools > Import Lichess study...` creates **one note per chapter**.
+The **Lichess studies** tab creates **one note per chapter**.
 
-- Sources: study or chapter links (several at once, separated by spaces), **User's studies…** (lists the studies of a Lichess user to pick from), `.pgn` files (several at once), or **Paste PGN…**. Private studies need a personal token with the `study:read` scope (**Private study?**).
+- Sources: study or chapter links (several at once, separated by spaces); in **More sources**, **User's studies…** (lists the studies of a Lichess user to pick from), `.pgn` files (several at once), **Paste PGN…** and the token for private studies (`study:read` scope; **Create a token** opens Lichess' form with the scopes checked). Files and links can also be dropped on the page. Before anything is loaded, the page lists the studies already in your collection, to load them again in one click.
 - Every chapter shows its **Status** in your collection (new, imported, changed on Lichess), the side you play (**You play**) and its **Note type**, all at a glance before importing:
   - The side is the chapter's orientation on Lichess (studies loaded by link). For exported files it is guessed from the comments ("Jogam as brancas") or the result; opening lines and games without it are played on both sides.
   - The note type follows the side: `AnkiChess` when you make the first move, `AnkiChess Flipped` when the first move is the opponent's (played automatically, the board turned to your side), `AnkiChess Study` to play both sides. Missing ones are cloned from `AnkiChess` (or `base_note_type` in the add-on config) with `flipBoard`/`playBothSides` set; any other chess note type can also be picked.
@@ -87,7 +87,9 @@ files generated in 'dist-anki'
 - Options:
   - **One note per variation**: each branch of an opening line becomes its own note, to drill every variation of a repertoire.
   - **Exercises from the ! and !! moves**: besides each full game, a "find the move" note for every move marked ! or !!, in the study's **Key moves** subdeck (a gamebook card: the other tries the author analysed are wrong answers with their comment).
-- The table: filter box, sort by clicking a column title, columns resized by dragging and shown or hidden by right-clicking the titles (kept with the window size), a board preview of where you start playing the selected chapter, several chapters selected with Ctrl/Shift+click changed together, and a double-click opens a chapter on Lichess. The window stays open after importing, to import more.
+- The table: a click on **Type**, **You play** or **Note type** opens its list; right-click selected chapters for the same choices, renaming their subdeck, opening them on Lichess or showing their notes in the Browser; Space checks or unchecks the selected chapters. A filter box (Ctrl+F) and a quick filter (new, changed, imported, by type), sorting by clicking a column title, statuses in colour, columns resized by dragging and shown or hidden by right-clicking the titles (Moves starts hidden), and a double-click opens a chapter on Lichess.
+- The board preview shows where you start playing the selected chapter, with buttons to step through its main line (and the list of its variations when they become notes).
+- Above the **Import** button (Ctrl+Enter), the plan: how many notes the checked chapters make, how many are new, updated, up to date or skipped, and which note types will be created. After importing, a link shows the new notes in the Browser (`Edit > Undo` takes the import back).
 - Notes keep an `[AnkiChessId]` in their PGN, so importing again finds them: it skips them, or updates them with **Update notes already imported** (only the ones that changed; your own tags are kept). PGNs from other sources (ChessBase, pasted…) are identified by the game itself, so they aren't duplicated either. Chapters deleted on Lichess are listed, with a link to see their notes in the Browser.
 - Chapters imported before keep their note type when imported again (changing it needs a full sync): the importer lists them and offers to open them in the Browser, for `Notes > Change Note Type`.
 - **Update imported Lichess studies** downloads again every study already in the collection and updates the notes whose chapter changed (they keep their note type and deck). New chapters are only reported, with an offer to open them in the import window.
@@ -114,7 +116,7 @@ All the importers file cards under one root deck, set in the add-on config (`dec
 
 ## Games (Chess.com and Lichess)
 
-`Tools > Import game (Chess.com / Lichess)...` turns one of your games into cards:
+The **Games** tab turns one of your games into cards:
 
 | Card | When | Mode |
 |---|---|---|
@@ -125,13 +127,15 @@ All the importers file cards under one root deck, set in the add-on config (`dec
 | Missed mate | You had a forced mate and did not play it; the whole mating line, any final mate accepted | Flipped |
 
 - Sources: the PGN exported from the Chess.com analysis board (`Share > PGN`) keeps the **Game Review** labels, which decide which moves become cards; a Chess.com game link also works (public API), with errors classified by Stockfish (Lichess thresholds on the drop of the win chance).
-- A **Lichess game link** brings the server analysis when it was requested on Lichess: its `?`/`??`/`?!` marks, "X was best" comments and best lines give the errors and their solutions, **without Stockfish**.
+- **My games…** lists your latest games on Chess.com and Lichess (only losses, or only the ones analysed on Lichess) to load one.
+- A **Lichess game** brings the server analysis when it was requested on Lichess: its `?`/`??`/`?!` marks, "X was best" comments and best lines give the errors and their solutions, **without Stockfish** (its settings, under **Stockfish ▸**, are hidden then).
+- The cards show their status in your collection and the plan above **Import**.
 - Your game move stays in the card marked as bad (`$4`, `$2`...), so repeating it fails the puzzle and shows its evaluation.
 - Stockfish is downloaded on first use into `user_files/stockfish` (official release, ~80 MB), or set `stockfish_path`.
 
 ## Lichess puzzles
 
-`Tools > Import Lichess puzzles...` imports puzzles as cards: the opponent's last move is played first, then you play the solution (any mate is accepted on the last move).
+The **Lichess puzzles** tab imports puzzles as cards: the opponent's last move is played first, then you play the solution (any mate is accepted on the last move). Filter by theme or id, sort by rating, a board preview, and the deck can be changed (`puzzle_deck`).
 
 - **Load my puzzles**: your latest puzzles (by default only the ones you failed), with a personal token that has the `puzzle:read` scope.
 - Or puzzle links (`lichess.org/training/…`) or ids.

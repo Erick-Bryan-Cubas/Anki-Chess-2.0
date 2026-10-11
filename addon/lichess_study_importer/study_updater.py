@@ -8,27 +8,20 @@ purpose, so the import window is offered for the new ones.
 
 from __future__ import annotations
 
-import re
 import time
+from typing import Callable
 
 from aqt import mw
 from aqt.operations import CollectionOp, QueryOp
 from aqt.utils import askUser, showInfo, showWarning, tooltip
 
 from . import anki_ops, decks, expand
-from .dialog import show_import_dialog
 from .i18n import tr
 from .lichess_api import LichessError, fetch_study_pgn
 from .pgn_split import KIND_EMPTY, KIND_UNSUPPORTED, split_games
 from .ui_common import apply_language, error_text, get_config
 
-STUDY_TAG = "lichess::study::"
 REQUEST_PAUSE = 0.3  # seconds between studies, to stay under Lichess' rate limit
-
-
-def imported_study_ids(col) -> list[str]:
-    ids = (t[len(STUDY_TAG):] for t in col.tags.all() if t.lower().startswith(STUDY_TAG))
-    return sorted({i for i in ids if re.fullmatch(r"[A-Za-z0-9]{8}", i)})
 
 
 def chapter_cards(ch, strip_anno: bool) -> list:
@@ -67,14 +60,19 @@ def update_rows(col, results, strip_anno: bool, report: dict) -> list:
     return rows
 
 
-def update_imported_studies():
+def update_imported_studies(parent=None, open_studies: Callable[[str], None] | None = None):
+    """
+    open_studies(links) loads the studies that have new chapters in the import window,
+    when the user wants to.
+    """
     if not mw.col:
         return
     apply_language()
+    parent = parent or mw
     config = get_config()
-    ids = imported_study_ids(mw.col)
+    ids = [study_id for study_id, _, _ in anki_ops.imported_studies(mw.col)]
     if not ids:
-        tooltip(tr("update.none"), parent=mw)
+        tooltip(tr("update.none"), parent=parent)
         return
     token = config.get("lichess_token", "")
     strip_anno = bool(config.get("strip_anno", True))
@@ -95,12 +93,14 @@ def update_imported_studies():
             time.sleep(REQUEST_PAUSE)
         return results
 
-    QueryOp(parent=mw, op=fetch, success=lambda results: apply_updates(results, strip_anno)).failure(
-        lambda e: showWarning(error_text(e), parent=mw)
-    ).with_progress(tr("update.progress", done=0, total=len(ids))).without_collection().run_in_background()
+    QueryOp(
+        parent=parent,
+        op=fetch,
+        success=lambda results: apply_updates(results, strip_anno, parent, open_studies),
+    ).failure(lambda e: showWarning(error_text(e), parent=parent)).with_progress(tr("update.progress", done=0, total=len(ids))).without_collection().run_in_background()
 
 
-def apply_updates(results, strip_anno: bool):
+def apply_updates(results, strip_anno: bool, parent, open_studies):
     report = {"studies": 0, "errors": [], "new": {}, "removed": 0}
     stats = {}
 
@@ -128,9 +128,9 @@ def apply_updates(results, strip_anno: bool):
             names = "\n".join(f"• {name}: {len(chapters)}" for name, chapters in new.values())
             lines.append(tr("update.new_chapters", studies=names))
             urls = " ".join(f"https://lichess.org/study/{i}" for i in new)
-            if askUser("\n\n".join([*lines, tr("update.open_new")]), parent=mw):
-                show_import_dialog(urls)
-            return
-        showInfo("\n\n".join(lines), parent=mw)
+            if open_studies and askUser("\n\n".join([*lines, tr("update.open_new")]), parent=parent):
+                open_studies(urls)
+                return
+        showInfo("\n\n".join(lines), parent=parent)
 
-    CollectionOp(parent=mw, op=op).success(on_success).run_in_background()
+    CollectionOp(parent=parent, op=op).success(on_success).run_in_background()
