@@ -13,7 +13,10 @@
   "lichess_username": "",
   "puzzle_max": 50,
   "puzzle_failed_only": true,
+  "puzzle_deck": "",
   "chesscom_usernames": [],
+  "chesscom_user": "",
+  "lichess_user": "",
   "chesscom_kinds": [],
   "analysis_time": 0.5,
   "stockfish_path": ""

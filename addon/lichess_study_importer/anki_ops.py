@@ -254,7 +254,8 @@ def import_chapters(
     """
     rows: list of (card, note type dict, decks.Placement), where a card is a
     pgn_split.Chapter, a game_analysis.GameCard or a puzzles.PuzzleCard. Runs inside a
-    CollectionOp; `stats` is filled with created/updated/unchanged/skipped counts.
+    CollectionOp; `stats` is filled with created/updated/unchanged/skipped counts, and
+    stats["nids"] with the notes created or updated (to show them in the Browser).
 
     Updating replaces the importer's tags (the note's own tags stay) and, with
     move_cards, moves the note's cards to the card's deck, so re-importing with
@@ -272,6 +273,7 @@ def import_chapters(
 
     for key in ("created", "updated", "unchanged", "skipped"):
         stats.setdefault(key, 0)
+    nids = stats.setdefault("nids", [])
     to_add, to_update = [], []
     moves: dict[int, list[int]] = {}  # deck id -> card ids
     for ch, model, placement in rows:
@@ -297,6 +299,7 @@ def import_chapters(
                         note.fields[1] = text_field
                     note.tags = new_tags
                     to_update.append(note)
+                    nids.append(note.id)
                     changed = True
                 if move_cards:
                     did = deck_id(placement.deck)
@@ -321,5 +324,26 @@ def import_chapters(
         if card_ids:
             col.set_deck(card_ids, did)
     if to_add:
-        col.add_notes(to_add)
+        col.add_notes(to_add)  # sets the ids of the new notes
+        nids += [request.note.id for request in to_add]
     return col.merge_undo_entries(undo_pos)
+
+
+STUDY_TAG = "lichess::study::"
+STUDY_NAME_RE = re.compile(r'\[StudyName "((?:[^"\\]|\\.)*)"\]')
+
+
+def imported_studies(col) -> list[tuple[str, str, int]]:
+    """(study id, name, note count) of the Lichess studies in the collection, by name."""
+    ids = {t[len(STUDY_TAG):] for t in col.tags.all() if t.lower().startswith(STUDY_TAG)}
+    studies = []
+    for study_id in ids:
+        if not re.fullmatch(r"[A-Za-z0-9]{8}", study_id):
+            continue
+        nids = col.find_notes(f'"tag:{STUDY_TAG}{_search_text(study_id)}"')
+        if not nids:
+            continue
+        m = STUDY_NAME_RE.search(col.get_note(nids[0]).fields[0])
+        name = html.unescape(m.group(1)) if m else study_id
+        studies.append((study_id, name, len(nids)))
+    return sorted(studies, key=lambda s: s[1].lower())

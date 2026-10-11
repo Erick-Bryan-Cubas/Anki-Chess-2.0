@@ -19,10 +19,12 @@
   activity (`puzzle:read` scope). Stored as plain text.
 - **lichess_username**: last user whose studies were listed (`User's studies…`).
 - **puzzle_max** / **puzzle_failed_only**: how many of your latest puzzles to load, and only the failed ones.
+- **puzzle_deck**: deck of the Lichess puzzles. Empty = `<root>::Lichess puzzles`.
 
-**Games** (`Tools > Import game (Chess.com / Lichess)...`):
+**Games** (`Tools > Import into AnkiChess...`, Games tab):
 
 - **chesscom_usernames**: your Chess.com and Lichess usernames; used to pick your side automatically.
+- **chesscom_user** / **lichess_user**: your usernames for **My games…** (your latest games).
 - **chesscom_kinds**: card types selected last time (empty = default selection).
 - **analysis_time**: Stockfish seconds per move (the positions that become cards get 3x more).
 - **stockfish_path**: Stockfish executable. Empty = the one downloaded by the add-on (`user_files/stockfish`) or `stockfish` on the PATH.
