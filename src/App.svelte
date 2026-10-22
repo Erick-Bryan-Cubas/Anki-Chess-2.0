@@ -3,6 +3,7 @@
   import ButtonsContainer from '$components/ButtonsContainer.svelte';
   import PromotePopup from '$components/PromotePopup.svelte';
   import PgnViewer from '$components/PgnViewer.svelte';
+  import PlayerBar from '$components/PlayerBar.svelte';
   import GameProvider from '$components/Providers/GameProvider.svelte';
   import EngineAnalysis from '$components/EngineAnalysis.svelte';
   import HelpWrapper from '$components/HelpWrapper.svelte';
@@ -65,6 +66,11 @@
     // Maximum board size; the viewport still limits it on small screens
     document.documentElement.style.setProperty('--board-max', `${userConfig.opts.boardSize}px`);
   });
+
+  $effect(() => {
+    // Room above and below the board for the player bars
+    document.documentElement.classList.toggle('player-bars', userConfig.opts.playerBars);
+  });
 </script>
 
 {#if import.meta.env.DEV}
@@ -109,15 +115,26 @@
         {/if}
       </div>
     {/if}
-    <div id="board-container">
+    <div id="board-container" class:player-bars={userConfig.opts.playerBars}>
       <SettingsMenu bind:isHelpOpen />
+      {#if userConfig.opts.playerBars}
+        <PlayerBar position="top" />
+      {/if}
       <ChessgroundBoard />
+      {#if userConfig.opts.playerBars}
+        <PlayerBar position="bottom" />
+      {/if}
       <PromotePopup />
     </div>
   </div>
 </GameProvider>
 
 <style lang="scss">
+  // Set on the root, where --board-size is computed from it
+  :global(:root.player-bars) {
+    --player-bar: clamp(18px, 3.4dvh, 28px);
+  }
+
   // Board plus room for the comment box (1000px with the default 600px board)
   $max-width: min(100vw, calc(var(--board-max, 600px) + 400px));
   $comment-box-width-calc: calc($max-width - var(--board-size) - calc($max-width * 0.03));
@@ -142,7 +159,7 @@
       color: var(--text-primary);
       border: var(--border-thin);
       border-radius: var(--border-radius-global);
-      max-height: var(--board-size);
+      max-height: calc(var(--board-size) + $player-bar * 2);
       margin-top: 1px;
       overflow: scroll;
       box-sizing: border-box;
@@ -182,7 +199,7 @@
     @media (orientation: portrait) {
       #commentBox {
         width: calc(var(--board-size) + 12px);
-        height: calc(100dvh - var(--board-size) - 14px);
+        height: calc(100dvh - var(--board-size) - $player-bar * 2 - 14px);
         margin-left: 1px;
       }
     }
@@ -193,6 +210,11 @@
       margin: 0 auto;
       grid-area: two;
       max-width: var(--board-max, 600px);
+
+      // Taller than wide with the player bars: as a square it would overflow phones
+      &.player-bars {
+        aspect-ratio: auto;
+      }
     }
   }
 
