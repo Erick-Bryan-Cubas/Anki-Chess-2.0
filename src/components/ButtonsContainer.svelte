@@ -83,6 +83,7 @@
   const canAddNote =
     typeof pycmd !== 'undefined' && !!(window as { ANKI_CHESS_IMPORTER?: number }).ANKI_CHESS_IMPORTER;
 
+  const wholePgn = () => writePgn(gameStore.rootGame!);
   const pgnFromHere = () =>
     writePgnFrom(gameStore.rootGame!, gameStore.pgnPath, gameStore.startFen);
 
@@ -93,12 +94,8 @@
     });
   }
 
-  function newNoteFromHere() {
-    const move = gameStore.currentMove;
-    const label = move
-      ? `${move.before.split(' ')[5]}${move.turn === 'w' ? '.' : '...'} ${move.san}`
-      : '';
-    pycmd(`ankiChessImporter:newNote:${JSON.stringify({ pgn: pgnFromHere(), move: label })}`);
+  function newNote() {
+    pycmd(`ankiChessImporter:newNote:${JSON.stringify({ pgn: wholePgn() })}`);
   }
 
   const exportItems: MenuItem[] = [
@@ -106,8 +103,9 @@
       type: 'action',
       label: 'Copy PGN',
       icon: IconFileCopy,
-      tooltip: 'The whole game, with the moves and lines you added while analysing.',
-      action: () => copyPgn(writePgn(gameStore.rootGame!), 'PGN Copied!'),
+      tooltip:
+        'The whole game, with the moves and lines you added while analysing. It gets its own AnkiChessId, so a card made from it is a card of its own.',
+      action: () => copyPgn(wholePgn(), 'PGN Copied!'),
     },
     {
       type: 'action',
@@ -121,11 +119,11 @@
       ? [
           {
             type: 'action',
-            label: 'New card from this position',
+            label: 'New card with this PGN',
             icon: IconAddCard,
             tooltip:
-              "Opens Anki's Add window with a card that starts from the position on the board: you play the side to move and the moves that follow on this line are the solution. Without moves after it, the card is played against Stockfish.",
-            action: newNoteFromHere,
+              "Opens Anki's Add window with the PGN of Copy PGN (the whole game with your analysis), in this card's deck and note type and with its tags.",
+            action: newNote,
           } as MenuItem,
         ]
       : []),

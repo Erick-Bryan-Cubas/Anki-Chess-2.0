@@ -102,9 +102,9 @@ On the back of an AnkiChess card, the export button (next to **Copy FEN**) has:
 
 - **Copy PGN**: the whole game with the moves and lines you added while analysing, by hand or from Stockfish, with the comments, arrows and evaluations kept.
 - **Copy PGN from this position**: a new game that starts from the position on the board (as its `[FEN]`), with the moves that follow on that line and their variations.
-- **New card from this position** (Anki desktop with this add-on): Anki's Add window opens with that PGN, in the deck and with the tags of the card being reviewed, and its text plus where the new card starts ("Analysis from 43. Rxe4"). You play the side to move, so it uses a note type set up as a puzzle (`AnkiChess`); without moves after the position, the card is played against Stockfish.
+- **New card with this PGN** (Anki desktop with this add-on): Anki's Add window opens with the PGN of **Copy PGN**, with the note type, deck and tags of the card being reviewed, and its text marked "With your analysis".
 
-These PGNs get their own `[AnkiChessId "analysis/…"]`, so importing or updating the study never takes them for the chapter they come from.
+These PGNs get their own `[AnkiChessId "analysis/…"]` instead of the card's, so a card made from them is a card of its own: importing or updating the study never takes it for the chapter it comes from (nor updates both with the chapter).
 
 ## Deck layout and tags
 

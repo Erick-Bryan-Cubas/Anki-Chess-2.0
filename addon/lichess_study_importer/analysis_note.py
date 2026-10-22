@@ -1,9 +1,9 @@
 """
-"New card from this position", in the export menu on the back of an AnkiChess card.
+"New card with this PGN", in the export menu on the back of an AnkiChess card.
 
-The template sends the PGN that starts from the position on the board; Anki's Add
-window opens with it, in the deck and with the tags of the card being reviewed, to be
-checked and added like any other note.
+The template sends the game with the analysis made on the back (as "Copy PGN" copies
+it); Anki's Add window opens with it, with the note type, deck and tags of the card
+being reviewed, to be checked and added like any other note.
 """
 
 from __future__ import annotations
@@ -18,11 +18,10 @@ from . import anki_ops
 from .i18n import tr
 from .note_info import analysis_text
 from .pgn_field import pgn_to_field
-from .pgn_split import MODE_PUZZLE
 from .ui_common import get_config
 
 MESSAGE = "ankiChessImporter:newNote:"
-# Tells the template the add-on is here, so its menu offers "New card from this position"
+# Tells the template the add-on is here, so its menu offers "New card with this PGN"
 FLAG_SCRIPT = "<script>window.ANKI_CHESS_IMPORTER = 1;</script>"
 
 
@@ -40,18 +39,18 @@ def on_js_message(handled, message, context):
     card = getattr(context, "card", None)
     if callable(card):  # the previewers have a card() method, the reviewer an attribute
         card = card()
-    open_new_note(payload.get("pgn", ""), payload.get("move", ""), card)
+    open_new_note(payload.get("pgn", ""), card)
     return (True, None)
 
 
 def _note_type(source: dict | None) -> dict | None:
-    """You play the side to move from the first position: a note type set up as a puzzle."""
-    if source and anki_ops.is_chess_note_type(source) and anki_ops.note_type_mode(source) == MODE_PUZZLE:
+    """The card's own note type: the PGN starts where it does, so you play the same side."""
+    if source and anki_ops.is_chess_note_type(source):
         return source
     return anki_ops.default_base(get_config().get("base_note_type", ""))
 
 
-def open_new_note(pgn: str, move: str, card=None) -> None:
+def open_new_note(pgn: str, card=None) -> None:
     col = mw.col
     source = card.note() if card else None
     note_type = _note_type(source.note_type() if source else None)
@@ -63,7 +62,7 @@ def open_new_note(pgn: str, move: str, card=None) -> None:
     source_text = source.fields[1] if source and len(source.fields) > 1 else ""
     note.fields[0] = pgn_to_field(pgn)
     if len(note.fields) > 1:
-        note.fields[1] = analysis_text(source_text, move)
+        note.fields[1] = analysis_text(source_text)
     if source:
         note.tags = list(source.tags)
 

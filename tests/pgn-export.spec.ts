@@ -41,6 +41,15 @@ test.describe('writePgn', () => {
     expect(pgn.indexOf('[Result')).toBeLessThan(pgn.indexOf('[WhiteElo'));
   });
 
+  test("gets its own id instead of the card's, so a card made from it is another card", () => {
+    const pgn = writePgn(load(studyPgn));
+    expect(pgn).toMatch(/\[AnkiChessId "analysis\/[0-9a-f]{8}"\]/);
+    expect(pgn).not.toContain('[AnkiChessId "study/abcdefgh/ijklmnop"]');
+    expect(pgn.match(/\[AnkiChessId/g)).toHaveLength(1);
+    expect(pgn).toContain('[ChapterURL "https://lichess.org/study/abcdefgh/ijklmnop"]');
+    expect(pgn).toContain(`[FEN "${startFen}"]`);
+  });
+
   test('reads back to the same game', () => {
     const once = writePgn(load(studyPgn));
     expect(writePgn(load(once))).toBe(once);
@@ -139,11 +148,11 @@ test('copies the PGN with the moves played on the back', async ({ page }) => {
 
   await openMenu(page);
   // Only Anki desktop with the add-on can open the Add window
-  await expect(page.getByText('New card from this position')).toHaveCount(0);
+  await expect(page.getByText('New card with this PGN')).toHaveCount(0);
   await page.getByText('Copy PGN', { exact: true }).click();
   const whole = await page.evaluate(() => (window as any).copied as string);
   expect(whole).toContain('2... d6) (1... d5) 2. Nf3');
-  expect(whole).toContain('[AnkiChessId "study/abcdefgh/ijklmnop"]');
+  expect(whole).toMatch(/\[AnkiChessId "analysis\//);
 
   await openMenu(page);
   await page.getByText('Copy PGN from this position').click();
@@ -153,19 +162,26 @@ test('copies the PGN with the moves played on the back', async ({ page }) => {
   expect(fromHere).toMatch(/\[AnkiChessId "analysis\//);
 });
 
-test('sends a new card from the position on the board to the add-on', async ({ page }) => {
+test('sends the PGN of Copy PGN to the add-on for a new card', async ({ page }) => {
   await loadViewer(page, true);
+  // At the end of a line added on the back, wherever the board is
   await page.evaluate(() => (window as any).gameStore.reset());
-  await page.evaluate(() => (window as any).gameStore.next());
-  await expect.poll(() => page.evaluate(() => (window as any).gameStore.currentMove?.san)).toBe('e5');
+  await page.evaluate(() => (window as any).gameStore.cg.move('d7', 'd5'));
+  await expect.poll(() => page.evaluate(() => (window as any).gameStore.currentMove?.san)).toBe('d5');
 
   await openMenu(page);
-  await page.getByText('New card from this position').click();
+  await page.getByText('Copy PGN', { exact: true }).click();
+  const copied = await page.evaluate(() => (window as any).copied as string);
+
+  await openMenu(page);
+  await page.getByText('New card with this PGN').click();
   const sent = await page.evaluate(() =>
     ((window as any).sent as string[]).filter((m) => m.startsWith('ankiChessImporter:newNote:')),
   );
   expect(sent).toHaveLength(1);
   const payload = JSON.parse(sent[0].slice('ankiChessImporter:newNote:'.length));
-  expect(payload.move).toBe('1... e5');
-  expect(payload.pgn).toMatch(/\n\n2\. Nf3 Nc6 3\. Bb5 0-1$/);
+  expect(payload.pgn).toBe(copied);
+  expect(payload.pgn).toContain(`[FEN "${startFen}"]`);
+  expect(payload.pgn).toContain('{ Intro } 1... e5 $1');
+  expect(payload.pgn).toContain('(1... d5) 2. Nf3 Nc6 3. Bb5 0-1');
 });
