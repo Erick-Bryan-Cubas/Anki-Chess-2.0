@@ -60,3 +60,13 @@ def chapter_details(ch: Chapter) -> list[str]:
     if game:
         lines.append(_link(game, tr("info.game")))
     return lines
+
+
+def analysis_text(source_text: str, move: str) -> str:
+    """
+    Text field of a card made from the analysis on the back of another one: that card's
+    text, then where the new card starts (after `move`, e.g. "43. Rxe4").
+    """
+    caption = tr("analysis.from_move", move=html.escape(move)) if move else tr("analysis.from_start")
+    caption = f"<i>{caption}</i>"
+    return f"{source_text}<br>{caption}" if source_text.strip() else caption

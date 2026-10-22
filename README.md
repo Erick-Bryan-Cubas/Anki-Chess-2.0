@@ -96,6 +96,16 @@ The **Lichess studies** tab creates **one note per chapter**.
 - The note's text field shows the chapter and study names, the opening (ECO and name), the players and event of games, the author and a link to the original Lichess game when the PGN has them.
 - PGNs pasted in the editor with wrapped lines (Chess.com exports) are fixed without touching the note template: `{{text:PGN}}` drops `<br>` without a space, gluing moves and comments together (`Qg3<br>b5` → `Qg3b5`). The add-on shows those cards with their line breaks, and adds a space before each line break of the `PGN` field when the profile opens and before every sync, so AnkiDroid reads them too.
 
+## Cards from your analysis
+
+On the back of an AnkiChess card, the export button (next to **Copy FEN**) has:
+
+- **Copy PGN**: the whole game with the moves and lines you added while analysing, by hand or from Stockfish, with the comments, arrows and evaluations kept.
+- **Copy PGN from this position**: a new game that starts from the position on the board (as its `[FEN]`), with the moves that follow on that line and their variations.
+- **New card from this position** (Anki desktop with this add-on): Anki's Add window opens with that PGN, in the deck and with the tags of the card being reviewed, and its text plus where the new card starts ("Analysis from 43. Rxe4"). You play the side to move, so it uses a note type set up as a puzzle (`AnkiChess`); without moves after the position, the card is played against Stockfish.
+
+These PGNs get their own `[AnkiChessId "analysis/…"]`, so importing or updating the study never takes them for the chapter they come from.
+
 ## Deck layout and tags
 
 All the importers file cards under one root deck, set in the add-on config (`deck_root`, default `Chess`, or `Xadrez` in pt-BR):

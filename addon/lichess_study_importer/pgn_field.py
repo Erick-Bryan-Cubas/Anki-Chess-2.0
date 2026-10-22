@@ -46,3 +46,11 @@ def show_line_breaks(card_html: str, field: str) -> str:
         card_html,
         count=1,
     )
+
+
+def pgn_to_field(pgn: str) -> str:
+    """
+    A PGN as the importers write the field: escaped text with <br> line breaks, each
+    after a space so the lines stay apart once {{text:PGN}} drops the <br>.
+    """
+    return html.escape(pgn, quote=False).rstrip("\n").replace("\n", " <br>")
