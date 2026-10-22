@@ -7,6 +7,7 @@ and from Lichess puzzles, all in one import window (Tools > Import into AnkiChes
 from aqt import gui_hooks, mw
 from aqt.qt import QAction
 
+from . import analysis_note
 from .anki_ops import fix_pgn_line_breaks, show_pgn_line_breaks
 from .i18n import tr
 from .import_window import show_import_window
@@ -40,3 +41,7 @@ gui_hooks.main_window_did_init.append(setup_menu)
 gui_hooks.card_will_show.append(show_pgn_line_breaks)
 gui_hooks.profile_did_open.append(lambda: fix_pgn_line_breaks(mw.col))
 gui_hooks.sync_will_start.append(lambda: fix_pgn_line_breaks(mw.col))
+
+# "New card from this position" on the back of a card: the Add window with that PGN
+gui_hooks.webview_will_set_content.append(analysis_note.add_flag)
+gui_hooks.webview_did_receive_js_message.append(analysis_note.on_js_message)

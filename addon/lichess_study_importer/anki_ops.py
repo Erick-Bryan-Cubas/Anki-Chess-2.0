@@ -13,7 +13,13 @@ from aqt import mw
 
 from .i18n import STRINGS, tr
 from .note_info import chapter_details
-from .pgn_field import GLUED_BREAK_SEARCH, has_glued_breaks, show_line_breaks, space_line_breaks
+from .pgn_field import (
+    GLUED_BREAK_SEARCH,
+    has_glued_breaks,
+    pgn_to_field,
+    show_line_breaks,
+    space_line_breaks,
+)
 from .pgn_split import CHAPTER_URL_RE, ID_TAG, MODE_FLIPPED, MODE_PUZZLE, MODE_STUDY, Chapter
 
 # Same markers used by the AnkiChess Companion add-on
@@ -157,9 +163,7 @@ def ensure_mode_note_type(base: dict, mode: str) -> dict:
 
 def build_note_fields(ch: Chapter, strip_anno: bool) -> tuple[str, str]:
     # Same format as the Companion example note: escaped text with <br> line breaks.
-    # The leading space keeps tags/lines separated once {{text:PGN}} strips the <br>.
-    pgn = html.escape(ch.pgn(strip_anno=strip_anno), quote=False).rstrip("\n")
-    pgn_field = pgn.replace("\n", " <br>")
+    pgn_field = pgn_to_field(ch.pgn(strip_anno=strip_anno))
 
     parts = [f"<h3>{html.escape(ch.name)}</h3>"]
     if ch.study_name:
