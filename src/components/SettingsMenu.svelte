@@ -22,7 +22,7 @@
 <style lang="scss">
   #global-settings {
     position: absolute;
-    top: $board-border-width;
+    top: calc($board-border-width + $player-bar);
     left: $board-border-width;
     margin: 3px;
     z-index: 100;
