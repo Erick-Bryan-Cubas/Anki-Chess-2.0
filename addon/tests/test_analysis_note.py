@@ -18,7 +18,7 @@ from lsi.note_info import analysis_text  # noqa: E402
 from lsi.pgn_field import field_text, pgn_to_field  # noqa: E402
 from lsi.pgn_split import split_games  # noqa: E402
 
-# "Copy PGN from this position" / "New card from this position" of the template
+# "Copy PGN" / "New card with this PGN" of the template
 ANALYSIS_PGN = """[Event "WCh26 m"]
 [White "Spassky, Boris V"]
 [Black "Petrosian, Tigran V"]
@@ -37,16 +37,15 @@ def reset_language():
     i18n.set_language(i18n.DEFAULT_LANGUAGE)
 
 
-def test_text_keeps_the_card_text_and_says_where_it_starts():
+def test_text_keeps_the_card_text_and_marks_the_analysis():
     i18n.set_language("pt-BR")
-    text = analysis_text("<h3>Spassky - Petrosian</h3>", "43. Rxe4")
-    assert text == "<h3>Spassky - Petrosian</h3><br><i>Análise a partir de 43. Rxe4</i>"
+    text = analysis_text("<h3>Spassky - Petrosian</h3>")
+    assert text == "<h3>Spassky - Petrosian</h3><br><i>Com a sua análise</i>"
 
 
-def test_text_from_the_start_and_without_a_card_text():
-    assert analysis_text("", "") == "<i>Analysis from the start position</i>"
-    assert analysis_text("  ", "1... e5") == "<i>Analysis from 1... e5</i>"
-    assert "&lt;" in analysis_text("", "<b>")  # the move is escaped
+def test_text_without_a_card_text():
+    assert analysis_text("") == "<i>With your analysis</i>"
+    assert analysis_text("  ") == "<i>With your analysis</i>"
 
 
 def test_field_has_a_space_before_each_line_break():

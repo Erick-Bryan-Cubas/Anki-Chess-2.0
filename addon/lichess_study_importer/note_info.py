@@ -62,11 +62,7 @@ def chapter_details(ch: Chapter) -> list[str]:
     return lines
 
 
-def analysis_text(source_text: str, move: str) -> str:
-    """
-    Text field of a card made from the analysis on the back of another one: that card's
-    text, then where the new card starts (after `move`, e.g. "43. Rxe4").
-    """
-    caption = tr("analysis.from_move", move=html.escape(move)) if move else tr("analysis.from_start")
-    caption = f"<i>{caption}</i>"
+def analysis_text(source_text: str) -> str:
+    """Text field of a card made from the analysis on the back of another one."""
+    caption = f"<i>{tr('analysis.caption')}</i>"
     return f"{source_text}<br>{caption}" if source_text.strip() else caption

@@ -67,17 +67,37 @@ export function writeMoves(moves: CustomPgnMove[]): string {
   return tokens.join(' ');
 }
 
-function writeGame(tags: Tags, intro: string, moves: CustomPgnMove[]): string {
+// Short stable hash, so the same analysis keeps the same id
+function hash(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+/**
+ * The tags, with an [AnkiChessId] of its own instead of the card's: a card made from
+ * this PGN is another card, and the Lichess Study Importer must never take it for the
+ * chapter it comes from (or update both with the chapter).
+ */
+function analysisTags(tags: Tags, movetext: string): Tags {
+  const own: Tags = { ...tags };
+  delete own[ID_TAG];
+  own[ID_TAG] = `analysis/${hash(`${tagValue(tags.FEN)}\n${movetext}`)}`;
+  return own;
+}
+
+function writeGame(tags: Tags, movetext: string): string {
   const result = RESULTS.includes(String(tags.Result)) ? String(tags.Result) : '*';
-  const movetext = [intro, writeMoves(moves), result].filter(Boolean).join(' ');
-  const header = writeTags(tags);
-  return header ? `${header}\n\n${movetext}` : movetext;
+  const body = [movetext, result].filter(Boolean).join(' ');
+  const header = writeTags(analysisTags(tags, movetext));
+  return header ? `${header}\n\n${body}` : body;
 }
 
 // The whole game, with the analysis
 export function writePgn(game: CustomPgnGame): string {
   const intro = writeComment(game.gameComment?.comment, game.gameComment);
-  return writeGame({ ...(game.tags as Tags) }, intro, game.moves);
+  const movetext = [intro, writeMoves(game.moves)].filter(Boolean).join(' ');
+  return writeGame({ ...(game.tags as Tags) }, movetext);
 }
 
 // The line holding the move at `path` and its index there; [main line, -1] at the start
@@ -91,31 +111,17 @@ export function lineAt(moves: CustomPgnMove[], path: PgnPath): [CustomPgnMove[],
   return [line, -1];
 }
 
-// Short stable hash, so the same analysis keeps the same id
-function hash(text: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
-  return (h >>> 0).toString(16).padStart(8, '0');
-}
-
 /**
  * A new game from the position after the move at `path` (the start with an empty path):
  * that position as its FEN, and the moves that follow on the same line, with their
- * variations. It keeps the game's tags but gets its own [AnkiChessId], so the Lichess
- * Study Importer never takes it for the chapter it comes from.
+ * variations. It keeps the game's other tags.
  */
 export function writePgnFrom(game: CustomPgnGame, path: PgnPath, startFen: string): string {
   const [line, index] = lineAt(game.moves, path);
-  const fen = index < 0 ? startFen : line[index].after;
-  const moves = line.slice(index + 1);
-  const movetext = writeMoves(moves);
-
   const tags: Tags = { ...(game.tags as Tags) };
   delete tags.FEN;
   delete tags.SetUp;
-  delete tags[ID_TAG];
-  tags.FEN = fen;
+  tags.FEN = index < 0 ? startFen : line[index].after;
   tags.SetUp = '1';
-  tags[ID_TAG] = `analysis/${hash(`${fen}\n${movetext}`)}`;
-  return writeGame(tags, '', moves);
+  return writeGame(tags, writeMoves(line.slice(index + 1)));
 }
