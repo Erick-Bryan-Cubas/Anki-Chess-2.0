@@ -40,14 +40,18 @@ STRINGS: dict[str, dict[str, str]] = {
         "kind.structure": "Structure",
         "deck.structures": "Structures",
         "filter.structures": "Structures",
-        "io.note_type": "Image Occlusion",
-        "note_type.io_tip": "Anki's Image Occlusion note type: one note per structure, with 3 cards.",
-        "side.structure_tip": (
-            "Your side, shown at the bottom: card 1 hides your pieces (rebuild your structure), "
-            "card 2 the opponent's, card 3 the structure's name."
+        "note_type.structure_tip": (
+            "A structure is a card of the base AnkiChess note type: the board shows it as a "
+            "structure to rebuild, whatever the note type's side settings."
         ),
-        "plan.new_io_type": "Anki's Image Occlusion note type will be added.",
-        "structure.cards": "3 cards: your structure, the opponent's, and its name. The plans are on the back.",
+        "side.structure_tip": (
+            "Your side, shown at the bottom: the card shows the opponent's pieces and you place "
+            "yours on the board."
+        ),
+        "structure.cards": (
+            "1 card: the opponent's pieces are shown and you place yours, from a palette that "
+            "counts them. The back shows the whole structure, your mistakes and the plans."
+        ),
         "side.white": "White",
         "side.black": "Black",
         "side.both": "Both sides",
@@ -431,14 +435,18 @@ STRINGS: dict[str, dict[str, str]] = {
         "kind.structure": "Estrutura",
         "deck.structures": "Estruturas",
         "filter.structures": "Estruturas",
-        "io.note_type": "Oclusão de imagem",
-        "note_type.io_tip": "O tipo de nota Oclusão de imagem do Anki: uma nota por estrutura, com 3 cartões.",
-        "side.structure_tip": (
-            "O seu lado, embaixo: o cartão 1 esconde as suas peças (monte a sua estrutura), "
-            "o 2 as do adversário, o 3 o nome da estrutura."
+        "note_type.structure_tip": (
+            "Uma estrutura é um cartão do tipo de nota AnkiChess base: o tabuleiro mostra a "
+            "estrutura para você montar, sejam quais forem as opções de lado do tipo de nota."
         ),
-        "plan.new_io_type": "O tipo de nota Oclusão de imagem do Anki será adicionado.",
-        "structure.cards": "3 cartões: a sua estrutura, a do adversário e o nome. Os planos ficam no verso.",
+        "side.structure_tip": (
+            "O seu lado, embaixo: o cartão mostra as peças do adversário e você coloca as suas "
+            "no tabuleiro."
+        ),
+        "structure.cards": (
+            "1 cartão: as peças do adversário aparecem e você coloca as suas, a partir de uma "
+            "paleta que conta as peças. O verso mostra a estrutura inteira, os seus erros e os planos."
+        ),
         "side.white": "Brancas",
         "side.black": "Pretas",
         "side.both": "Os dois lados",

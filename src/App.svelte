@@ -11,6 +11,7 @@
   import ErrorPopup from '$components/ErrorPopup.svelte';
   import SettingsMenu from '$components/SettingsMenu.svelte';
   import TemplateConfig from '$components/TemplateConfig.svelte';
+  import BoardLayout from '$components/BoardLayout.svelte';
   import { BOARD_THEMES } from '$utils/themeData';
   import { hasPgnComments } from '$features/pgn/pgnParsing';
 
@@ -97,33 +98,35 @@
 <HelpWrapper bind:isHelpOpen />
 <GameProvider {rawPgn} {boardMode}>
   <ErrorPopup bind:isHelpOpen />
-  <div id="container" style="--board-light: {themeColors.light}; --board-dark: {themeColors.dark};">
-    {#if boardMode === 'Viewer' || (userConfig.opts.frontText && userText) || showFrontComments}
-      <div id="commentBox">
-        {#if userText}
-          <div id="userTextContainer">
-            <div id="textField">{@html userText}</div>
+  <BoardLayout
+    {themeColors}
+    playerBars={userConfig.opts.playerBars}
+    showComments={boardMode === 'Viewer' || (userConfig.opts.frontText && !!userText) || showFrontComments}
+  >
+    {#snippet comments()}
+      {#if userText}
+        <div id="userTextContainer">
+          <div id="textField">{@html userText}</div>
+        </div>
+      {/if}
+      {#if showFrontComments}
+        <PuzzleComments />
+      {/if}
+      {#if boardMode === 'Viewer'}
+        <div id="sticky-container">
+          <div id="buttons-container">
+            <ButtonsContainer />
           </div>
-        {/if}
-        {#if showFrontComments}
-          <PuzzleComments />
-        {/if}
-        {#if boardMode === 'Viewer'}
-          <div id="sticky-container">
-            <div id="buttons-container">
-              <ButtonsContainer />
-            </div>
-            <div id="analysis-container">
-              <EngineAnalysis />
-            </div>
+          <div id="analysis-container">
+            <EngineAnalysis />
           </div>
-          <div id="pgnViewer">
-            <PgnViewer />
-          </div>
-        {/if}
-      </div>
-    {/if}
-    <div id="board-container" class:player-bars={userConfig.opts.playerBars}>
+        </div>
+        <div id="pgnViewer">
+          <PgnViewer />
+        </div>
+      {/if}
+    {/snippet}
+    {#snippet board()}
       <SettingsMenu bind:isHelpOpen />
       {#if userConfig.opts.playerBars}
         <PlayerBar position="top" />
@@ -133,107 +136,41 @@
         <PlayerBar position="bottom" />
       {/if}
       <PromotePopup />
-    </div>
-  </div>
+    {/snippet}
+  </BoardLayout>
 </GameProvider>
 
 <style lang="scss">
-  // Set on the root, where --board-size is computed from it
-  :global(:root.player-bars) {
-    --player-bar: clamp(18px, 3.4dvh, 28px);
+  #userTextContainer {
+    @include flex-center;
+    width: 100%;
+    background: var(--surface-secondary);
+    color: var(--text-primary);
+    border-bottom: var(--border-thin);
+
+    #textField {
+      padding: 0.5em;
+    }
   }
 
-  // Board plus room for the comment box (1000px with the default 600px board)
-  $max-width: min(100vw, calc(var(--board-max, 600px) + 400px));
-  $comment-box-width-calc: calc($max-width - var(--board-size) - calc($max-width * 0.03));
+  #sticky-container {
+    position: sticky;
+    top: 0; /* Sticks to the top of the container when you scroll */
+    z-index: 25;
+    #buttons-container {
+      @include flex-center;
+      border-bottom: var(--border-thin);
+      background: var(--surface-secondary);
+      padding: 4px;
+    }
+  }
 
-  #container {
-    margin: 0;
-    margin-right: 15px;
-    gap: 4px;
-    width: $max-width;
-    grid-template-areas: 'one two';
+  #pgnViewer {
+    font-size: 1.2em;
+    background: var(--surface-primary);
     display: grid;
-    grid-template-columns: auto auto;
-    grid-template-rows: auto auto;
-    justify-content: center;
-
-    #commentBox {
-      grid-area: one;
-      padding: 0px;
-      width: $comment-box-width-calc;
-      box-shadow: var(--shadow-main);
-      background: var(--surface-primary);
-      color: var(--text-primary);
-      border: var(--border-thin);
-      border-radius: var(--border-radius-global);
-      max-height: calc(var(--board-size) + $player-bar * 2);
-      margin-top: 1px;
-      overflow: scroll;
-      box-sizing: border-box;
-
-      #userTextContainer {
-        @include flex-center;
-        width: 100%;
-        background: var(--surface-secondary);
-        color: var(--text-primary);
-        border-bottom: var(--border-thin);
-
-        #textField {
-          padding: 0.5em;
-        }
-      }
-
-      #sticky-container {
-        position: sticky;
-        top: 0; /* Sticks to the top of the container when you scroll */
-        z-index: 25;
-        #buttons-container {
-          @include flex-center;
-          border-bottom: var(--border-thin);
-          background: var(--surface-secondary);
-          padding: 4px;
-        }
-      }
-
-      #pgnViewer {
-        font-size: 1.2em;
-        background: var(--surface-primary);
-        display: grid;
-        grid-template-columns: auto 1fr 1fr; /* 3-column layout */
-        border-bottom: var(--border-thin);
-      }
-    }
-    @media (orientation: portrait) {
-      #commentBox {
-        width: calc(var(--board-size) + 12px);
-        height: calc(100dvh - var(--board-size) - $player-bar * 2 - 14px);
-        margin-left: 1px;
-      }
-    }
-    #board-container {
-      aspect-ratio: 1 / 1;
-      contain: layout; /* Helps WebKit keep layout calculations isolated */
-      position: relative;
-      margin: 0 auto;
-      grid-area: two;
-      max-width: var(--board-max, 600px);
-
-      // Taller than wide with the player bars: as a square it would overflow phones
-      &.player-bars {
-        aspect-ratio: auto;
-      }
-    }
-  }
-
-  @media (orientation: portrait) {
-    #container {
-      margin-right: 0px;
-      grid-template-areas:
-        'two'
-        'one';
-      grid-template-columns: auto;
-    }
+    grid-template-columns: auto 1fr 1fr; /* 3-column layout */
+    border-bottom: var(--border-thin);
   }
 </style>
 

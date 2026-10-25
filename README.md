@@ -94,13 +94,12 @@ The **Lichess studies** tab creates **one note per chapter**.
   - The side is the chapter's orientation on Lichess (studies loaded by link). For exported files it is guessed from the comments ("Jogam as brancas") or the result; opening lines and games without it are played on both sides.
   - The note type follows the side: `AnkiChess` when you make the first move, `AnkiChess Flipped` when the first move is the opponent's (played automatically, the board turned to your side), `AnkiChess Study` to play both sides. Missing ones are cloned from `AnkiChess` (or `base_note_type` in the add-on config) with `flipBoard`/`playBothSides` set; any other chess note type can also be picked.
   - New and changed chapters are selected; full games only with **Include full games**. Chapters of other chess variants (Chess960…) can't be imported.
-- **Structures**: a chapter with a `[FEN]` and no moves (a pawn structure, often without kings, with the plans of each side in its comment) becomes an Anki **Image Occlusion** note, in the study's **Structures** subdeck:
-  - The image is the board from your side (**You play**, the chapter's orientation on Lichess), with the annotator's highlighted squares and arrows, and the structure's name under it.
-  - It makes three cards. Card 1 hides your pieces, to rebuild your structure from the opponent's; card 2 hides the opponent's; card 3 hides the name, to recognize the structure.
-  - The masks cover every square but the pieces shown, so their shape doesn't give the answer away. The masks of the other cards stay visible ("hide one, guess one").
-  - The plans and a link to the chapter are on the back.
-  - Masks edited in Anki's mask editor (**Edit** on the card) are kept when the study is imported again, unless the structure, its name or your side changes.
-  - Uses Anki's own Image Occlusion note type (added if missing; Anki 23.10+, AnkiDroid 2.17+).
+- **Structures**: a chapter with a `[FEN]` and no moves (a pawn structure, often without kings, with the plans of each side in its comment) becomes an `AnkiChess` note in the study's **Structures** subdeck, whose card has you **rebuild your side on the board**:
+  - The board is seen from your side (**You play**, the chapter's orientation on Lichess) and shows the opponent's pieces.
+  - A palette has your pieces, each with how many are placed and how many the structure has (pawn 4/6). Tap a piece, then the squares; or drag it onto the board. Tap one of yours with the same piece to remove it, or with another to change it; the eraser removes, and a piece dragged off the board too. **Clear** starts over.
+  - **Check** marks your pieces in green (right square) or red (wrong), and shows faded the ones still missing. You can fix them and check again.
+  - The back shows the whole structure with your mistakes circled in red, the annotator's highlighted squares and arrows, and the plans.
+  - The PGN keeps the chapter with `[AnkiChessMode "structure"]` and your side as `[Orientation]`; importing again keeps the side chosen for it. A structure PGN pasted by hand (a FEN without kings and no moves) opens the same way.
 - **Gamebook** chapters work as on Lichess: only the main line is the answer, a variation you play is a wrong move that shows its comment, and the opponent keeps to the main line. The template reads `[ChapterMode "gamebook"]` from the PGN.
 - Options:
   - **One note per variation**: each branch of an opening line becomes its own note, to drill every variation of a repertoire.
@@ -133,7 +132,7 @@ All the importers file cards under one root deck, set in the add-on config (`dec
 <root>::<study>::Tactics             Lichess chapters set up from a position
 <root>::<study>::Annotated games     Lichess full games (a result such as 1-0)
 <root>::<study>::Key moves           "find the move" notes from the games' ! and !! moves
-<root>::<study>::Structures          Lichess structures (a FEN with no moves), as Image Occlusion notes
+<root>::<study>::Structures          Lichess structures (a FEN with no moves), rebuilt on the board
 <root>::Openings::<family>           opening, book moves and book lines of your games
 <root>::My games::<error type>       blunders, mistakes, misses, inaccuracies, missed mates of your games
 <root>::Lichess puzzles              Lichess puzzles

@@ -48,9 +48,12 @@ def show_line_breaks(card_html: str, field: str) -> str:
     )
 
 
-def pgn_to_field(pgn: str) -> str:
+def pgn_to_field(pgn: str, keep_lines: bool = False) -> str:
     """
     A PGN as the importers write the field: escaped text with <br> line breaks, each
-    after a space so the lines stay apart once {{text:PGN}} drops the <br>.
+    after a space so the lines stay apart once {{text:PGN}} drops the <br>. keep_lines
+    adds a newline after each <br>: {{text:PGN}} keeps it, so the template reads the
+    comment's lines (the plans of a structure).
     """
-    return html.escape(pgn, quote=False).rstrip("\n").replace("\n", " <br>")
+    escaped = html.escape(pgn, quote=False).rstrip("\n")
+    return escaped.replace("\n", " <br>\n" if keep_lines else " <br>")

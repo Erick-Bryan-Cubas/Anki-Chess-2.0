@@ -16,6 +16,7 @@ if "lsi" not in sys.modules:
 from lsi.pgn_field import (  # noqa: E402
     field_text,
     has_glued_breaks,
+    pgn_to_field,
     show_line_breaks,
     space_line_breaks,
 )
@@ -54,6 +55,17 @@ def test_editor_blocks_and_importer_fields():
     imported = '[Event "x"] <br> <br>1. e4 e5 *'
     assert not has_glued_breaks(imported)
     assert space_line_breaks(imported) == imported
+
+
+def test_structure_fields_keep_their_lines_through_the_text_filter():
+    pgn = '[FEN "8/8/8/8/8/8/8/8 w - - 0 1"]\n\n{ Plano das brancas:\n1. b5 }\n*\n'
+    # Other notes: the lines are only <br>, gone in the template
+    assert text_filter(pgn_to_field(pgn)) == '[FEN "8/8/8/8/8/8/8/8 w - - 0 1"]  { Plano das brancas: 1. b5 } *'
+    # Structures: a newline after each <br>, which {{text:PGN}} keeps (checked in Anki 26.9.3)
+    field = pgn_to_field(pgn, keep_lines=True)
+    assert "Plano das brancas: <br>\n1. b5" in field
+    assert "Plano das brancas: \n1. b5" in text_filter(field)
+    assert not has_glued_breaks(field)
 
 
 def test_field_text_keeps_line_breaks():
