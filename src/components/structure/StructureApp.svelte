@@ -356,14 +356,15 @@
       padding: 2px;
       border: var(--border-thin);
       border-radius: var(--border-radius-global);
-      background: var(--surface-primary);
-      color: var(--text-primary);
+      // The board's light square: black pieces stay visible on a dark theme too
+      background: var(--board-light);
+      color: #222;
       cursor: pointer;
       touch-action: none; // a drag from the palette isn't a scroll
 
       &.selected {
-        background: var(--interactive-button-hover, #4caf50);
-        box-shadow: inset 0 0 0 2px var(--status-pass);
+        background: var(--board-dark);
+        box-shadow: inset 0 0 0 3px var(--status-pass);
       }
       &.none .piece {
         opacity: 0.35;
@@ -398,14 +399,13 @@
 
     .count {
       font-size: 0.8em;
+      font-weight: bold;
       font-variant-numeric: tabular-nums;
       &.done {
-        color: var(--status-pass);
-        font-weight: bold;
+        color: #1b7a33;
       }
       &.over {
-        color: var(--status-fail);
-        font-weight: bold;
+        color: #c62828;
       }
     }
 
