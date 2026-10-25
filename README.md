@@ -71,14 +71,25 @@ files generated in 'dist-anki'
 
 `addon/lichess_study_importer` is a separate Anki add-on that creates AnkiChess notes from Lichess studies, analysed games (Chess.com or Lichess) and Lichess puzzles.
 
-- One window, `Tools > Import into AnkiChess…` (also in the Companion's `AnkiChess` menu when installed), with the **Lichess studies**, **Games** and **Lichess puzzles** tabs and the **Update imported Lichess studies** button. It keeps its size, and each table its columns; the pages stay open after importing.
+- One window, `Tools > Import into AnkiChess…` (also in the Companion's `AnkiChess` menu when installed), with the **Lichess studies**, **Games** and **Lichess puzzles** tabs, the **Update imported Lichess studies** button and your **Lichess token**. It keeps its size, and each table its columns; the pages stay open after importing.
 - Interface in English (default) or Brazilian Portuguese: set `"language"` to `"en"`, `"pt-BR"` or `"auto"` (follow Anki's language) in `Tools > Add-ons > Config`.
+
+### Lichess token
+
+A personal API access token of your Lichess account (Preferences › API access tokens), set once with **Lichess token…** at the bottom of the import window and used by every tab:
+
+- It downloads your private studies and your puzzle activity.
+- Lichess sends study downloads one at a time per IP without a token, and three at a time per account with one: with the token, updating many studies isn't cut short by its limit.
+- **Create a token on Lichess** opens Lichess' form with the `study:read` and `puzzle:read` scopes checked; click Create there and paste the token (`lip_…`). **Check** asks Lichess whose token it is and which scopes it has: it warns when one of the two is missing, or when the token allows more than the add-on needs (it is stored as plain text in the add-on config).
+- The bottom bar shows the account of the saved token; **Remove token** takes it away.
+
+Without a token, when Lichess answers "too many requests" (HTTP 429), the add-on waits and tries again by itself, counting down in the progress window (Esc stops and keeps what was downloaded). Study downloads go one at a time, a second apart.
 
 ## Studies
 
 The **Lichess studies** tab creates **one note per chapter**.
 
-- Sources: study or chapter links (several at once, separated by spaces); in **More sources**, **User's studies…** (lists the studies of a Lichess user to pick from), `.pgn` files (several at once), **Paste PGN…** and the token for private studies (`study:read` scope; **Create a token** opens Lichess' form with the scopes checked). Files and links can also be dropped on the page. Before anything is loaded, the page lists the studies already in your collection, to load them again in one click.
+- Sources: study or chapter links (several at once, separated by spaces); in **More sources**, **User's studies…** (lists the studies of a Lichess user to pick from), `.pgn` files (several at once), **Paste PGN…** and **Private study (token)…**, which opens the [Lichess token](#lichess-token). Files and links can also be dropped on the page. Before anything is loaded, the page lists the studies already in your collection, to load them again in one click.
 - Every chapter shows its **Status** in your collection (new, imported, changed on Lichess), the side you play (**You play**) and its **Note type**, all at a glance before importing:
   - The side is the chapter's orientation on Lichess (studies loaded by link). For exported files it is guessed from the comments ("Jogam as brancas") or the result; opening lines and games without it are played on both sides.
   - The note type follows the side: `AnkiChess` when you make the first move, `AnkiChess Flipped` when the first move is the opponent's (played automatically, the board turned to your side), `AnkiChess Study` to play both sides. Missing ones are cloned from `AnkiChess` (or `base_note_type` in the add-on config) with `flipBoard`/`playBothSides` set; any other chess note type can also be picked.
@@ -99,7 +110,7 @@ The **Lichess studies** tab creates **one note per chapter**.
 - Above the **Import** button (Ctrl+Enter), the plan: how many notes the checked chapters make, how many are new, updated, up to date or skipped, and which note types will be created. After importing, a link shows the new notes in the Browser (`Edit > Undo` takes the import back).
 - Notes keep an `[AnkiChessId]` in their PGN, so importing again finds them: it skips them, or updates them with **Update notes already imported** (only the ones that changed; your own tags are kept). PGNs from other sources (ChessBase, pasted…) are identified by the game itself, so they aren't duplicated either. Chapters deleted on Lichess are listed, with a link to see their notes in the Browser.
 - Chapters imported before keep their note type when imported again (changing it needs a full sync): the importer lists them and offers to open them in the Browser, for `Notes > Change Note Type`.
-- **Update imported Lichess studies** downloads again every study already in the collection and updates the notes whose chapter changed (they keep their note type and deck). New chapters are only reported, with an offer to open them in the import window.
+- **Update imported Lichess studies** downloads again every study already in the collection and updates the notes whose chapter changed (they keep their note type and deck). New chapters are only reported, with a button to open them in the import window. If Lichess still limits the downloads after the waits (or you stop with Esc), the studies left are listed by name with **Try again** (only those) and, without a token, **Add a token…**.
 - The note's text field shows the chapter and study names, the opening (ECO and name), the players and event of games, the author and a link to the original Lichess game when the PGN has them.
 - PGNs pasted in the editor with wrapped lines (Chess.com exports) are fixed without touching the note template: `{{text:PGN}}` drops `<br>` without a space, gluing moves and comments together (`Qg3<br>b5` → `Qg3b5`). The add-on shows those cards with their line breaks, and adds a space before each line break of the `PGN` field when the profile opens and before every sync, so AnkiDroid reads them too.
 
@@ -155,7 +166,7 @@ The **Games** tab turns one of your games into cards:
 
 The **Lichess puzzles** tab imports puzzles as cards: the opponent's last move is played first, then you play the solution (any mate is accepted on the last move). Filter by theme or id, sort by rating, a board preview, and the deck can be changed (`puzzle_deck`).
 
-- **Load my puzzles**: your latest puzzles (by default only the ones you failed), with a personal token that has the `puzzle:read` scope.
+- **Load my puzzles**: your latest puzzles (by default only the ones you failed), with your [Lichess token](#lichess-token) (`puzzle:read` scope; without one, the button opens it).
 - Or puzzle links (`lichess.org/training/…`) or ids.
 - Tags: `lichess::puzzle`, one per theme (`lichess::puzzle::mateIn3`…) and `lichess::puzzle::failed`.
 

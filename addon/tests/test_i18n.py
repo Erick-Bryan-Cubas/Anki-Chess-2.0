@@ -44,7 +44,7 @@ def test_every_key_used_in_the_code_exists():
             with open(os.path.join(ADDON_DIR, name), encoding="utf-8") as f:
                 source = f.read()
             used |= set(re.findall(r'tr\(\s*"([\w.]+)"', source))
-            used |= set(re.findall(r'"((?:error|kind|mode)\.[\w.]+)"', source))
+            used |= set(re.findall(r'"((?:error|kind|mode)\.[\w.]+|lichess\.\w+_wait)"', source))
             # Keys raised by LichessError / ChessComError / EngineError
             used |= set(re.findall(r'Error\(\s*"([\w.]+)"', source))
     assert used, "no translation keys found"

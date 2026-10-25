@@ -18,7 +18,11 @@
 - **base_note_type**: note type the Flipped/Study ones are cloned from, when a chapter or card needs
   one that doesn't exist yet. Empty = `AnkiChess`, or the first chess note type set up as a puzzle.
 - **lichess_token**: personal token to download private studies (`study:read` scope) and your puzzle
-  activity (`puzzle:read` scope). Stored as plain text.
+  activity (`puzzle:read` scope). With it Lichess limits study downloads by account (3 at a time)
+  instead of by IP (1 at a time). Stored as plain text; set it with **Lichess token…** at the bottom
+  of the import window, which checks it with Lichess.
+- **lichess_token_user**: the Lichess account of the token, found when it was checked (shown in the
+  import window).
 - **lichess_username**: last user whose studies were listed (`User's studies…`).
 - **puzzle_max** / **puzzle_failed_only**: how many of your latest puzzles to load, and only the failed ones.
 - **puzzle_deck**: deck of the Lichess puzzles. Empty = `<root>::Lichess puzzles`.

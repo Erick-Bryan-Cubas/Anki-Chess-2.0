@@ -50,6 +50,7 @@ from .ui_common import (
     browse,
     error_text,
     get_config,
+    lichess_token,
     paint_status,
     plan_text,
     readonly_item,
@@ -130,7 +131,7 @@ class RecentGamesDialog(QDialog):
         lichess_user = self.lichess_edit.text().strip()
         if not chesscom_user and not lichess_user:
             return
-        token = self.config.get("lichess_token", "")
+        token = lichess_token()
         self.status.setText(tr("recent.loading"))
 
         def fetch(col):
@@ -398,7 +399,7 @@ class GameImportPage(QWidget):
         text = self.url_edit.text()
         lichess_id = lichess_api.parse_game_url(text)
         parsed = chesscom.parse_game_url(text)
-        token = self.config.get("lichess_token", "")
+        token = lichess_token()
         if lichess_id:
             fetch = lambda col: lichess_api.fetch_game_pgn(lichess_id, token)  # noqa: E731
         elif parsed:

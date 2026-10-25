@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import sys
@@ -128,3 +129,132 @@ def test_chapter_details():
         'Autor: <a href="https://lichess.org/@/basso01">basso01</a>',
         '<a href="https://lichess.org/5BBrW941">Partida original</a>',
     ]
+
+
+# --- Lichess' download limit (429) and the token check ---
+
+BUSY = b'{"error":"Please only run 1 request(s) at a time"}'
+
+
+class FakeLichess:
+    """urlopen answering from a list: bytes (a 200 body) or (code, body, headers) errors."""
+
+    def __init__(self, monkeypatch, answers):
+        import urllib.error
+
+        self.answers = list(answers)
+        self.requests = []
+        self.clock = 0.0
+        self.sleeps = []
+
+        def urlopen(req, timeout=30):
+            self.requests.append((req, self.clock))
+            answer = self.answers.pop(0)
+            if isinstance(answer, tuple):
+                code, body, headers = answer
+                raise urllib.error.HTTPError(req.full_url, code, "", headers, io.BytesIO(body))
+            return io.BytesIO(answer)
+
+        def pause(seconds):
+            self.sleeps.append(round(seconds, 3))
+            self.clock += seconds
+
+        monkeypatch.setattr(lichess_api.urllib.request, "urlopen", urlopen)
+        monkeypatch.setattr(lichess_api, "_clock", lambda: self.clock)
+        monkeypatch.setattr(lichess_api, "_pause", pause)
+        monkeypatch.setattr(lichess_api, "_last_study", -100.0)
+
+
+def waits():
+    asked = []
+
+    def wait(seconds, key):
+        asked.append((seconds, key))
+        return True
+
+    return asked, wait
+
+
+def test_busy_download_is_waited_out_and_tried_again(monkeypatch):
+    fake = FakeLichess(monkeypatch, [(429, BUSY, {}), (429, BUSY, {}), b"[Event \"x\"]"])
+    asked, wait = waits()
+    assert lichess_api.fetch_study_pgn("abcdefgh", wait=wait) == '[Event "x"]'
+    assert asked == [(2, "lichess.busy_wait"), (4, "lichess.busy_wait")]
+    assert len(fake.requests) == 3
+
+
+def test_still_busy_after_every_wait_is_rate_limited(monkeypatch):
+    FakeLichess(monkeypatch, [(429, BUSY, {})] * (len(lichess_api.BUSY_WAITS) + 1))
+    asked, wait = waits()
+    with pytest.raises(lichess_api.LichessError) as e:
+        lichess_api.fetch_study_pgn("abcdefgh", wait=wait)
+    assert e.value.key == "error.rate_limited"
+    assert [s for s, _ in asked] == list(lichess_api.BUSY_WAITS)
+
+
+def test_giving_up_during_a_wait_cancels(monkeypatch):
+    FakeLichess(monkeypatch, [(429, BUSY, {})])
+    with pytest.raises(lichess_api.LichessError) as e:
+        lichess_api.fetch_study_pgn("abcdefgh", wait=lambda seconds, key: False)
+    assert e.value.key == "error.cancelled"
+
+
+def test_other_429_waits_a_minute_or_retry_after(monkeypatch):
+    FakeLichess(monkeypatch, [(429, b"", {}), b"{}"])
+    asked, wait = waits()
+    lichess_api.fetch_puzzle("abcde", wait=wait)
+    assert asked == [(lichess_api.RATE_LIMIT_WAIT, "lichess.rate_wait")]
+
+    FakeLichess(monkeypatch, [(429, b"", {"Retry-After": "7"}), (429, b"", {}), b"{}"])
+    asked, wait = waits()
+    with pytest.raises(lichess_api.LichessError) as e:
+        lichess_api.fetch_puzzle("abcde", wait=wait)
+    assert e.value.key == "error.rate_limited"  # only one new try after a rate limit
+    assert asked == [(7.0, "lichess.rate_wait")]
+
+
+def test_without_a_wait_only_the_short_busy_waits(monkeypatch):
+    fake = FakeLichess(monkeypatch, [(429, BUSY, {})] * 4)
+    with pytest.raises(lichess_api.LichessError) as e:
+        lichess_api.fetch_user_studies("someone")
+    assert e.value.key == "error.rate_limited"
+    assert fake.sleeps == list(lichess_api.QUIET_WAITS)
+
+    FakeLichess(monkeypatch, [(429, b"", {})])
+    with pytest.raises(lichess_api.LichessError):
+        lichess_api.fetch_game_pgn("abcdefgh")  # no minute-long wait nobody sees
+
+
+def test_study_downloads_are_a_little_apart_without_a_token(monkeypatch):
+    fake = FakeLichess(monkeypatch, [b"a", b"b", b"c", b"d"])
+    lichess_api.fetch_study_pgn("aaaaaaaa")
+    lichess_api.fetch_study_pgn("bbbbbbbb")
+    assert fake.sleeps == [0.0, lichess_api.STUDY_GAP]
+    fake.clock += 5  # long after the last one: no pause
+    lichess_api.fetch_study_pgn("cccccccc")
+    assert fake.sleeps[-1] == 0.0
+    # With a token Lichess allows three at a time: no pause at all
+    lichess_api.fetch_study_pgn("dddddddd", token="lip_x")
+    assert len(fake.sleeps) == 3
+    assert fake.requests[-1][0].get_header("Authorization") == "Bearer lip_x"
+
+
+def test_no_access_is_not_tried_again(monkeypatch):
+    fake = FakeLichess(monkeypatch, [(404, b"", {})])
+    asked, wait = waits()
+    with pytest.raises(lichess_api.LichessError) as e:
+        lichess_api.fetch_study_pgn("abcdefgh", wait=wait)
+    assert e.value.key == "error.no_access"
+    assert asked == [] and len(fake.requests) == 1
+
+
+def test_check_token(monkeypatch):
+    info = {"userId": "someone", "scopes": "study:read,puzzle:read,study:write", "expires": None}
+    fake = FakeLichess(monkeypatch, [json.dumps({"lip_good": info}).encode(), b'{"lip_bad": null}'])
+    assert lichess_api.check_token(" lip_good ") == info
+    req = fake.requests[0][0]
+    assert req.get_method() == "POST" and req.data == b"lip_good"
+    assert lichess_api.check_token("lip_bad") is None
+    assert lichess_api.token_scopes(info) == ([], ["study:write"])
+    assert lichess_api.token_scopes({"scopes": "puzzle:read"}) == (["study:read"], [])
+    assert lichess_api.token_scopes(None) == (list(lichess_api.TOKEN_SCOPES), [])

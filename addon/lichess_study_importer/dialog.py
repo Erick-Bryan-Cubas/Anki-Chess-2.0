@@ -75,17 +75,19 @@ from .pgn_split import (
     split_games,
 )
 from .structures import StructureCard
+from .token_dialog import edit_token
 from .ui_common import (
     BoardPreview,
     ask_pgn,
     browse,
     error_text,
     get_config,
+    lichess_token,
+    lichess_waiter,
     readonly_item,
     restore_columns,
     save_columns,
     status_color,
-    token_link,
     write_config,
 )
 
@@ -328,7 +330,8 @@ class StudyImportPage(QWidget):
             ("source.user_studies", self.on_user_studies),
             ("source.open_file", self.on_open_file),
             ("source.paste", self.on_paste),
-            ("source.token", lambda: self.show_token(True)),
+            # The token, for private studies (also in the window's bottom bar)
+            ("source.token", lambda: edit_token(self)),
         ):
             more_menu.addAction(tr(key), slot)
         more.setMenu(more_menu)
@@ -336,20 +339,6 @@ class StudyImportPage(QWidget):
         src.addWidget(self.url_btn)
         src.addWidget(more)
         layout.addLayout(src)
-
-        # Only needed for private studies: hidden until asked for, or a token is saved
-        self.token_row = QWidget()
-        token_layout = QHBoxLayout(self.token_row)
-        token_layout.setContentsMargins(0, 0, 0, 0)
-        self.token_edit = QLineEdit(self.config.get("lichess_token", ""))
-        self.token_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.token_edit.setPlaceholderText(tr("token.placeholder"))
-        self.token_edit.setToolTip(tr("token.tooltip"))
-        token_layout.addWidget(QLabel(tr("token.label")))
-        token_layout.addWidget(self.token_edit, 1)
-        token_layout.addWidget(token_link())
-        layout.addWidget(self.token_row)
-        self.show_token(bool(self.token_edit.text()))
 
         self.study_label = QLabel(tr("study.none"))
         self.study_label.setWordWrap(True)
@@ -524,11 +513,6 @@ class StudyImportPage(QWidget):
     def save_layout(self):
         save_columns(self.table, COLUMNS_KEY)
 
-    def show_token(self, visible: bool):
-        self.token_row.setVisible(visible)
-        if visible:
-            self.token_edit.setFocus()
-
     # --- Start page ---
 
     def build_start_page(self) -> QWidget:
@@ -614,7 +598,7 @@ class StudyImportPage(QWidget):
             self.load_sources([(text, tr("source.pasted"), True)])
 
     def on_user_studies(self):
-        dialog = UserStudiesDialog(self, self.config.get("lichess_username", ""), self.token_edit.text())
+        dialog = UserStudiesDialog(self, self.config.get("lichess_username", ""), lichess_token())
         if not dialog.exec():
             return
         self.config["lichess_username"] = dialog.user_edit.text().strip()
@@ -631,35 +615,46 @@ class StudyImportPage(QWidget):
         if not studies:
             showWarning(tr("warn.invalid_url"), parent=self)
             return
-        token = self.token_edit.text()
+        token = lichess_token()
         self.study_label.setText(tr("study.downloading"))
         self.url_btn.setEnabled(False)
 
         def fetch_all():
             results = []
             for i, (study_id, chapter_id) in enumerate(studies, 1):
-                mw.taskman.run_on_main(
-                    lambda i=i: self.study_label.setText(tr("study.downloading_n", done=i, total=len(studies)))
-                )
+                downloading = tr("study.downloading_n", done=i, total=len(studies))
+                mw.taskman.run_on_main(lambda text=downloading: self.study_label.setText(text))
+                # A 429 is waited out, counted down beside the download
+                wait = lichess_waiter(lambda text, d=downloading: self.study_label.setText(f"{d} {text}".strip()))
                 try:
-                    text = fetch_study_pgn(study_id, chapter_id, token=token)
+                    text = fetch_study_pgn(study_id, chapter_id, token=token, wait=wait)
                     results.append((text, f"lichess.org/study/{study_id}", chapter_id is None))
                 except LichessError as e:
                     results.append((e, study_id, False))
+                    if e.key == "error.rate_limited":
+                        # Still refused after the waits: the next ones would only wait again
+                        results += [(e, rest, False) for rest, _ in studies[i:]]
+                        break
             return results
 
         def on_done(fut):
             self.url_btn.setEnabled(True)
-            sources, errors = [], []
+            sources, errors, needs_token = [], [], False
             for value, source, complete in fut.result():
                 if isinstance(value, LichessError):
                     errors.append(f"{source}: {error_text(value)}")
-                    if value.key == "error.no_access":
-                        self.show_token(True)  # private study: the token is the way in
+                    # A private study, or the download limit by IP: a token is the way in
+                    needs_token |= value.key in ("error.no_access", "error.rate_limited")
                 else:
                     sources.append((value, source, complete))
             if errors:
-                showWarning(tr("study.load_errors", errors="\n".join(errors)), parent=self)
+                message = tr("study.load_errors", errors="\n".join(errors))
+                if needs_token and not lichess_token():
+                    if askUser(f"{message}\n\n{tr('token.offer')}", parent=self) and edit_token(self):
+                        self.on_load_url()  # again, with the token
+                        return
+                else:
+                    showWarning(message, parent=self)
             if sources:
                 self.load_sources(sources)
             elif errors:
@@ -1382,7 +1377,6 @@ class StudyImportPage(QWidget):
                 "split_lines": self.split_lines.isChecked(),
                 "key_moves": self.key_moves.isChecked(),
                 "update_existing": update_existing,
-                "lichess_token": self.token_edit.text().strip(),
                 **self.renamed_decks(),
             }
         )
