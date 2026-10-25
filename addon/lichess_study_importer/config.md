@@ -4,9 +4,11 @@
   `<root>::<study>::Opening lines`, `::Tactics` and `::Annotated games` (opening lines are tagged
   `opening::<family>::<variation>`); Chess.com cards go to `<root>::Openings::<family>` and
   `<root>::My games::<error type>`. Re-importing with "update" moves older notes into this layout.
-- **study_decks** / **chapter_decks**: deck names renamed in the import window (the study deck, and
-  the subdeck of a chapter), by study and by chapter, so that importing the study again uses them.
-  Filled by the window; remove an entry to go back to the default name.
+- **study_decks** / **chapter_decks**: deck names chosen in the import window (the study deck, typed
+  or picked with Choose…, and the subdeck of a chapter), by study and by chapter, so that importing
+  the study again uses them. A study deck that no longer exists gives way to the deck the study's
+  notes are in. Filled by the window; remove an entry (or use Default names) to go back to the
+  default name.
 - **include_games**: select full-game chapters (no FEN) by default.
 - **split_lines**: one note per variation of the opening lines (each branch from the start to its end).
 - **key_moves**: besides each full game, a "find the move" note for every move marked ! or !!,

@@ -21,7 +21,7 @@ import unicodedata
 from dataclasses import dataclass, field
 
 from .chess_lib import chess
-from .i18n import tr
+from .i18n import STRINGS, tr
 from .openings import follow_book, load_book
 from .pgn_split import KIND_EXERCISE, KIND_GAME, KIND_LINE, KIND_STRUCTURE, Chapter
 
@@ -132,6 +132,27 @@ def clean_deck_name(name: str | None) -> str:
     """
     parts = (CONTROL_CHARS.sub("", part).strip() for part in (name or "").split("::"))
     return "::".join(part for part in parts if part)
+
+
+SECTION_KEYS = ("deck.lines", "deck.tactics", "deck.games", "deck.key_moves", "deck.structures")
+
+
+def study_deck_of(deck_names: list[str]) -> str | None:
+    """
+    The deck a study's notes are in now, from the decks of its cards: their study deck
+    without the kind's subdeck (in any language), the most common one when they were
+    moved apart. Follows decks renamed or moved in Anki.
+    """
+    sections = {strings[key].lower() for strings in STRINGS.values() for key in SECTION_KEYS if key in strings}
+    counts: dict[str, int] = {}
+    for name in deck_names:
+        levels = clean_deck_name(name).split("::")
+        if len(levels) > 1 and levels[-1].lower() in sections:
+            levels = levels[:-1]
+        deck = "::".join(levels)
+        if deck:
+            counts[deck] = counts.get(deck, 0) + 1
+    return max(counts, key=lambda d: counts[d]) if counts else None
 
 
 def section_name(kind: str) -> str:

@@ -10,8 +10,10 @@ import re
 
 from anki.collection import AddNoteRequest
 from anki.notetypes_pb2 import StockNotetype
+from anki.utils import ids2str
 from aqt import mw
 
+from . import decks
 from .board_image import render_structure_png
 from .i18n import STRINGS, tr
 from .note_info import chapter_details
@@ -399,6 +401,20 @@ def import_chapters(
 
 STUDY_TAG = "lichess::study::"
 STUDY_NAME_RE = re.compile(r'\[StudyName "((?:[^"\\]|\\.)*)"\]')
+
+
+def study_deck_in_collection(col, study_id: str) -> str | None:
+    """The deck a study's notes are in now (cards of filtered decks count at home)."""
+    cids = col.find_cards(f'"tag:{STUDY_TAG}{_search_text(study_id)}"')
+    if not cids:
+        return None
+    dids = col.db.list(f"select case when odid then odid else did end from cards where id in {ids2str(cids)}")
+    return decks.study_deck_of([col.decks.name(did) for did in dids])
+
+
+def deck_names(col) -> list[str]:
+    """The collection's decks, for the study deck list (filtered decks left out)."""
+    return [d.name for d in col.decks.all_names_and_ids(include_filtered=False, skip_empty_default=True)]
 
 
 def imported_studies(col) -> list[tuple[str, str, int]]:

@@ -25,6 +25,7 @@ from aqt.qt import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QCompleter,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -40,6 +41,7 @@ from aqt.qt import (
     QShortcut,
     QSplitter,
     QStackedWidget,
+    QStringListModel,
     QStyle,
     QStyledItemDelegate,
     QStyleOption,
@@ -51,6 +53,7 @@ from aqt.qt import (
     QVBoxLayout,
     QWidget,
 )
+from aqt.studydeck import StudyDeck
 from aqt.utils import askUser, openLink, showWarning, tooltip
 
 from . import anki_ops, decks, expand
@@ -371,12 +374,23 @@ class StudyImportPage(QWidget):
         self.deck_edit.setToolTip(tr("form.study_deck_tip"))
         self.deck_edit.textEdited.connect(self.on_study_deck_typed)
         self.deck_edit.editingFinished.connect(self.on_study_deck_edited)
+        # Typing suggests the collection's decks (any part of the name)
+        self.deck_names = QStringListModel(self)
+        completer = QCompleter(self.deck_names, self.deck_edit)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        completer.activated[str].connect(self.set_study_deck)
+        self.deck_edit.setCompleter(completer)
+        self.deck_choose = QPushButton(tr("form.study_deck_choose"))
+        self.deck_choose.setToolTip(tr("form.study_deck_choose_tip"))
+        self.deck_choose.clicked.connect(self.choose_study_deck)
         deck_reset = QPushButton(tr("form.study_deck_reset"))
         deck_reset.setToolTip(tr("form.study_deck_reset_tip"))
         deck_reset.clicked.connect(self.reset_decks)
         deck_row.addWidget(QLabel(tr("form.study_deck")))
         deck_row.addWidget(self.study_combo)
         deck_row.addWidget(self.deck_edit, 1)
+        deck_row.addWidget(self.deck_choose)
         deck_row.addWidget(deck_reset)
         chapters_layout.addLayout(deck_row)
 
@@ -671,7 +685,7 @@ class StudyImportPage(QWidget):
                         name=decks.study_name(ch, source),
                         fallback=source,
                         default_deck=default,
-                        deck=(study_decks.get(key) if key else None) or default,
+                        deck=self.linked_deck(key, study_decks) or default,
                         complete=complete and bool(key),
                     )
                     by_study[group] = study
@@ -710,9 +724,24 @@ class StudyImportPage(QWidget):
             self.study_combo.addItem(study.name)
         self.study_combo.blockSignals(False)
         self.study_combo.setVisible(len(self.studies) > 1)
+        self.refresh_deck_names()
         self.on_study_selected(0)
         self.stack.setCurrentIndex(1)
         self.populate_table()
+
+    @staticmethod
+    def linked_deck(key: str | None, study_decks: dict) -> str | None:
+        """
+        A study's deck: the one chosen for it while it still exists, else the deck its
+        notes are in now (decks renamed or moved in Anki are followed), else the one
+        chosen (to be created).
+        """
+        if not key:
+            return None
+        chosen = study_decks.get(key)
+        if chosen and mw.col.decks.by_name(chosen):
+            return chosen
+        return anki_ops.study_deck_in_collection(mw.col, key) or chosen
 
     def find_removed_chapters(self):
         """Notes of the loaded studies whose chapter was deleted on Lichess."""
@@ -1157,10 +1186,55 @@ class StudyImportPage(QWidget):
             self.refresh_rows([r for r in self.rows if r.study is study])
 
     def on_study_deck_edited(self):
-        """Show the name as Anki will store it (trimmed levels, no empty ones)."""
+        """Show the name as Anki will store it (trimmed levels, no empty ones), and keep it."""
         study = self.current_study()
         if study and self.deck_edit.text() != study.deck:
             self.deck_edit.setText(study.deck)
+        self.link_study_deck(study)
+
+    def set_study_deck(self, name: str):
+        """A deck picked from the list or the suggestions: the study's deck from now on."""
+        study = self.current_study()
+        if not study:
+            return
+        study.deck = decks.clean_deck_name(name) or study.default_deck
+        self.deck_edit.setText(study.deck)
+        self.refresh_rows([r for r in self.rows if r.study is study])
+        self.link_study_deck(study)
+
+    def choose_study_deck(self):
+        """Anki's deck list (with its filter and Add button), as in the Add window."""
+        study = self.current_study()
+        if not study:
+            return
+        StudyDeck(
+            mw,
+            current=study.deck,
+            accept=tr("form.study_deck_choose_accept"),
+            title=tr("form.study_deck_choose_title", study=study.name),
+            parent=self,
+            geomKey="ankiChessStudyDeck",
+            callback=lambda chooser: chooser.name and self.set_study_deck(chooser.name),
+        )
+
+    def link_study_deck(self, study: Study | None):
+        """
+        Keep the study's deck in the config right away, so the next import of the study
+        (even an update) uses it; the default name isn't kept.
+        """
+        if not study or not study.key:
+            return
+        study_decks = dict(self.config.get("study_decks", {}))
+        if study.deck != study.default_deck:
+            study_decks[study.key] = study.deck
+        else:
+            study_decks.pop(study.key, None)
+        if study_decks != self.config.get("study_decks", {}):
+            self.config["study_decks"] = study_decks
+            write_config(self.config)
+
+    def refresh_deck_names(self):
+        self.deck_names.setStringList(anki_ops.deck_names(mw.col))
 
     def reset_decks(self):
         """Back to the names from Lichess: the study deck and its subdecks."""
@@ -1170,6 +1244,7 @@ class StudyImportPage(QWidget):
         study.deck = study.default_deck
         self.deck_edit.setText(study.deck)
         self.reset_subdecks([r for r in self.rows if r.study is study])
+        self.link_study_deck(study)
 
     # --- Selection ---
 
@@ -1322,6 +1397,7 @@ class StudyImportPage(QWidget):
             self.choices = anki_ops.note_type_choices(base) if base else []
             self.choice_exists = {name: exists for name, _, exists in self.choices}
             self.refresh_io_type()
+            self.refresh_deck_names()
             for row in self.rows:
                 if row.structure:
                     row.note_type = self.io_name

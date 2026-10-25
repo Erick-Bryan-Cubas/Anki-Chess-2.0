@@ -121,3 +121,15 @@ def test_every_error_kind_has_a_deck_name():
     for lang in i18n.STRINGS:
         for kind in ga.ENGINE_KINDS:
             assert f"deck.kind.{kind}" in i18n.STRINGS[lang]
+
+
+def test_study_deck_follows_where_its_notes_are():
+    study = "Chess::Treinamento Rating Evolution::#C99 - Siciliana O'kelly"
+    # Its kinds' subdecks (in either language) are left out
+    assert decks.study_deck_of([f"{study}::Táticas", f"{study}::Estruturas", f"{study}::Tactics"]) == study
+    # Cards moved apart: the deck most of them are in
+    assert decks.study_deck_of([f"{study}::Táticas", f"{study}::Táticas", "Outro::Táticas"]) == study
+    # A deck that isn't a kind's subdeck is the study deck itself
+    assert decks.study_deck_of(["Chess::Minha pasta"]) == "Chess::Minha pasta"
+    assert decks.study_deck_of(["Tactics"]) == "Tactics"  # a top-level deck stays
+    assert decks.study_deck_of([]) is None

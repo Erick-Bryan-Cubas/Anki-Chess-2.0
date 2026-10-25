@@ -91,9 +91,14 @@ STRINGS: dict[str, dict[str, str]] = {
             "Deck for this study's chapters, which go to its subdecks (Deck column). \"::\" "
             "separates the levels, e.g. Chess::Courses::Sicilian; spaces around each level are "
             "removed and empty levels dropped. Anki ignores upper/lower case in deck names, so a "
-            "deck with the same name is reused. Renamed decks are kept for the next import of "
-            "this study."
+            "deck with the same name is reused. Type to see the decks of your collection, or "
+            "choose one. The deck is kept for this study: the next import uses it, and when it "
+            "no longer exists, the deck the study's notes are in."
         ),
+        "form.study_deck_choose": "Choose…",
+        "form.study_deck_choose_tip": "Pick one of your decks for this study (or add one), as in Anki's Add window.",
+        "form.study_deck_choose_title": "Deck for {study}",
+        "form.study_deck_choose_accept": "Choose",
         "form.study_deck_reset": "Default names",
         "form.study_deck_reset_tip": "Back to the study name from Lichess and the default subdecks.",
         "token.show": "Private study?",
@@ -437,8 +442,14 @@ STRINGS: dict[str, dict[str, str]] = {
             "\"::\" separa os níveis, ex.: Xadrez::Cursos::Siciliana; os espaços em volta de cada "
             "nível são removidos e níveis vazios descartados. O Anki não diferencia maiúsculas "
             "de minúsculas nos nomes de deck, então um deck com o mesmo nome é reaproveitado. "
-            "Os nomes editados ficam guardados para a próxima importação deste estudo."
+            "Digite para ver os decks da sua coleção, ou escolha um. O deck fica guardado para "
+            "este estudo: a próxima importação usa ele e, quando ele não existir mais, o deck "
+            "onde estão as notas do estudo."
         ),
+        "form.study_deck_choose": "Escolher…",
+        "form.study_deck_choose_tip": "Escolha um dos seus decks para este estudo (ou adicione um), como na janela Adicionar do Anki.",
+        "form.study_deck_choose_title": "Deck de {study}",
+        "form.study_deck_choose_accept": "Escolher",
         "form.study_deck_reset": "Nomes padrão",
         "form.study_deck_reset_tip": "Volta para o nome do estudo no Lichess e os subdecks padrão.",
         "token.show": "Estudo privado?",
