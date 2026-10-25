@@ -9,8 +9,10 @@ import json
 import re
 
 from anki.collection import AddNoteRequest
+from anki.notetypes_pb2 import StockNotetype
 from aqt import mw
 
+from .board_image import render_structure_png
 from .i18n import STRINGS, tr
 from .note_info import chapter_details
 from .pgn_field import (
@@ -21,6 +23,7 @@ from .pgn_field import (
     space_line_breaks,
 )
 from .pgn_split import CHAPTER_URL_RE, ID_TAG, MODE_FLIPPED, MODE_PUZZLE, MODE_STUDY, Chapter
+from .structures import stored_side
 
 # Same markers used by the AnkiChess Companion add-on
 NOTE_TYPE_TAG = "ankiChessVersion"
@@ -49,6 +52,21 @@ def is_chess_note_type(m: dict) -> bool:
 
 def find_chess_note_types() -> list[dict]:
     return [m for m in mw.col.models.all() if is_chess_note_type(m)]
+
+
+# How Anki itself recognises its Image Occlusion note type (aqt/editor_legacy.py), whose
+# name and field names are translated
+IO_STOCK_KIND = StockNotetype.OriginalStockKind.ORIGINAL_STOCK_KIND_IMAGE_OCCLUSION
+
+
+def find_io_note_type(col) -> dict | None:
+    return next((m for m in col.models.all() if m.get("originalStockKind") == IO_STOCK_KIND), None)
+
+
+def io_note_type(col) -> dict:
+    """Anki's Image Occlusion note type, added if missing (structure chapters)."""
+    col.add_image_occlusion_notetype()
+    return find_io_note_type(col)
 
 
 def show_pgn_line_breaks(text: str, card, kind: str) -> str:
@@ -181,11 +199,51 @@ def _search_text(text: str) -> str:
     return text
 
 
+def note_fields(card, strip_anno: bool) -> list[str]:
+    """The fields a card fills, in its note type's order."""
+    if getattr(card, "is_structure", False):
+        return card.fields()
+    return list(build_note_fields(card, strip_anno))
+
+
+def _with_kept_masks(note, fields: list[str]) -> list[str]:
+    """
+    The fields of a structure note, keeping its masks (maybe edited in Anki's mask
+    editor) while its image is the same; a new image gets the new masks.
+    """
+    if len(note.fields) > 1 and note.fields[1] == fields[1]:
+        return [note.fields[0], *fields[1:]]
+    return fields
+
+
+def structure_side(col, card) -> str | None:
+    """The side a structure chapter was imported for (it may have been changed then)."""
+    for nid in find_existing(col, card):
+        fields = col.get_note(nid).fields
+        side = stored_side(fields[4]) if len(fields) > 4 else None
+        if side:
+            return side
+    return None
+
+
+def write_structure_image(col, card) -> None:
+    """The board image of a structure note, in the media folder (once per image)."""
+    name = card.image_name()
+    if not col.media.have(name):
+        col.media.write_data(name, render_structure_png(card))
+
+
 def find_existing(col, card) -> list[int]:
     """Notes imported from a card, by the [AnkiChessId] written in their PGN."""
     key = card.dedupe_key
     if not key:
         return []
+    if getattr(card, "is_structure", False):
+        # Image Occlusion notes keep the id in their Comments field
+        io = find_io_note_type(col)
+        if not io:
+            return []
+        return list(col.find_notes(f'mid:{io["id"]} "{ID_TAG} \\"{_search_text(key)}\\""'))
     exact = col.find_notes(f'"PGN:*{ID_TAG} \\"{_search_text(key)}\\"*"')
     if exact:
         return list(exact)
@@ -215,12 +273,12 @@ def merged_tags(current: list[str], new: list[str]) -> list[str]:
     return tags
 
 
-def _same_note(note, pgn_field: str, text_field: str, tags: list[str]) -> bool:
-    return (
-        note.fields[0] == pgn_field
-        and (len(note.fields) < 2 or note.fields[1] == text_field)
-        and {t.lower() for t in note.tags} == {t.lower() for t in tags}
-    )
+def _same_fields(note, fields: list[str]) -> bool:
+    return all(i >= len(note.fields) or note.fields[i] == value for i, value in enumerate(fields))
+
+
+def _same_note(note, fields: list[str], tags: list[str]) -> bool:
+    return _same_fields(note, fields) and {t.lower() for t in note.tags} == {t.lower() for t in tags}
 
 
 def card_status(col, card, strip_anno: bool) -> tuple[str, list[int]]:
@@ -228,10 +286,11 @@ def card_status(col, card, strip_anno: bool) -> tuple[str, list[int]]:
     nids = find_existing(col, card)
     if not nids:
         return "new", []
-    pgn_field, text_field = build_note_fields(card, strip_anno)
+    fields = note_fields(card, strip_anno)
+    structure = getattr(card, "is_structure", False)
     for nid in nids:
         note = col.get_note(nid)
-        if note.fields[0] != pgn_field or (len(note.fields) > 1 and note.fields[1] != text_field):
+        if not _same_fields(note, _with_kept_masks(note, fields) if structure else fields):
             return "changed", nids
     return "same", nids
 
@@ -240,7 +299,8 @@ def removed_chapter_notes(col, study_id: str, chapter_ids: set[str]) -> list[int
     """Notes of a study whose chapter is no longer in it."""
     removed = []
     for nid in col.find_notes(f'"tag:lichess::study::{_search_text(study_id)}"'):
-        m = CHAPTER_URL_RE.search(col.get_note(nid).fields[0])
+        # The chapter URL is in the PGN, or in the Back Extra of a structure note
+        m = CHAPTER_URL_RE.search(" ".join(col.get_note(nid).fields))
         if m and m.group(1) == study_id and m.group(2) not in chapter_ids:
             removed.append(nid)
     return removed
@@ -281,7 +341,8 @@ def import_chapters(
     to_add, to_update = [], []
     moves: dict[int, list[int]] = {}  # deck id -> card ids
     for ch, model, placement in rows:
-        pgn_field, text_field = build_note_fields(ch, strip_anno)
+        structure = getattr(ch, "is_structure", False)
+        fields = note_fields(ch, strip_anno)
         tags = [*ch.note_tags, *placement.tags]
 
         existing = [col.get_note(nid) for nid in find_existing(col, ch)]
@@ -296,11 +357,13 @@ def import_chapters(
                 continue
             changed = False
             for note in existing:
+                new_fields = _with_kept_masks(note, fields) if structure else fields
                 new_tags = merged_tags(note.tags, tags)
-                if not _same_note(note, pgn_field, text_field, new_tags):
-                    note.fields[0] = pgn_field
-                    if len(note.fields) > 1:
-                        note.fields[1] = text_field
+                if not _same_note(note, new_fields, new_tags):
+                    if structure:
+                        write_structure_image(col, ch)
+                    for i, value in enumerate(new_fields[: len(note.fields)]):
+                        note.fields[i] = value
                     note.tags = new_tags
                     to_update.append(note)
                     nids.append(note.id)
@@ -313,9 +376,10 @@ def import_chapters(
             continue
 
         note = col.new_note(model)
-        note.fields[0] = pgn_field
-        if len(note.fields) > 1:
-            note.fields[1] = text_field
+        if structure:
+            write_structure_image(col, ch)
+        for i, value in enumerate(fields[: len(note.fields)]):
+            note.fields[i] = value
         note.tags = tags
         to_add.append(AddNoteRequest(note=note, deck_id=deck_id(placement.deck)))
         stats["created"] += 1
@@ -347,7 +411,9 @@ def imported_studies(col) -> list[tuple[str, str, int]]:
         nids = col.find_notes(f'"tag:{STUDY_TAG}{_search_text(study_id)}"')
         if not nids:
             continue
-        m = STUDY_NAME_RE.search(col.get_note(nids[0]).fields[0])
+        # The name is in the PGN of the chess notes (structure notes have no PGN)
+        names = (STUDY_NAME_RE.search(col.get_note(nid).fields[0]) for nid in nids)
+        m = next((m for m in names if m), None)
         name = html.unescape(m.group(1)) if m else study_id
         studies.append((study_id, name, len(nids)))
     return sorted(studies, key=lambda s: s[1].lower())

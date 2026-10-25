@@ -18,14 +18,20 @@ from aqt.utils import askUser, showInfo, showWarning, tooltip
 from . import anki_ops, decks, expand
 from .i18n import tr
 from .lichess_api import LichessError, fetch_study_pgn
-from .pgn_split import KIND_EMPTY, KIND_UNSUPPORTED, split_games
+from .pgn_split import KIND_EMPTY, KIND_STRUCTURE, KIND_UNSUPPORTED, split_games
+from .structures import StructureCard
 from .ui_common import apply_language, error_text, get_config
 
 REQUEST_PAUSE = 0.3  # seconds between studies, to stay under Lichess' rate limit
 
 
-def chapter_cards(ch, strip_anno: bool) -> list:
+def chapter_cards(ch, strip_anno: bool, col=None) -> list:
     """The chapter and the cards that may have been made from it, once each."""
+    if ch.kind == KIND_STRUCTURE:
+        # An Image Occlusion note, for the side it was imported for
+        card = StructureCard(ch, ch.player or ch.side_to_move)
+        side = anki_ops.structure_side(col, card) if col is not None else None
+        return [StructureCard(ch, side) if side else card]
     cards = {}
     for card in [ch, *expand.split_variations(ch, strip_anno), *expand.key_move_cards(ch, strip_anno)]:
         cards.setdefault(card.dedupe_key, card)
@@ -47,7 +53,7 @@ def update_rows(col, results, strip_anno: bool, report: dict) -> list:
                 continue
             tags = decks.chapter_tags(ch, decks.suggest_kind(ch))
             imported = False
-            for card in chapter_cards(ch, strip_anno):
+            for card in chapter_cards(ch, strip_anno, col):
                 nids = anki_ops.find_existing(col, card)
                 if nids:
                     imported = True

@@ -28,7 +28,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "study.download_failed": "Failed to download the study.",
         "study.summary": (
             "<b>{study}</b> — {total} chapters: {exercises} exercises, {lines} opening lines, "
-            "{games} full games, {empty} empty."
+            "{games} full games, {structures} structures, {empty} empty."
         ),
         "filter.include_games": "Include full games",
         "filter.check_exercises": "Select exercises and lines",
@@ -42,6 +42,17 @@ STRINGS: dict[str, dict[str, str]] = {
         "kind.game": "Full game",
         "kind.line": "Opening line",
         "kind.empty": "Empty",
+        "kind.structure": "Structure",
+        "deck.structures": "Structures",
+        "filter.structures": "Structures",
+        "io.note_type": "Image Occlusion",
+        "note_type.io_tip": "Anki's Image Occlusion note type: one note per structure, with 3 cards.",
+        "side.structure_tip": (
+            "Your side, shown at the bottom: card 1 hides your pieces (rebuild your structure), "
+            "card 2 the opponent's, card 3 the structure's name."
+        ),
+        "plan.new_io_type": "Anki's Image Occlusion note type will be added.",
+        "structure.cards": "3 cards: your structure, the opponent's, and its name. The plans are on the back.",
         "side.white": "White",
         "side.black": "Black",
         "side.both": "Both sides",
@@ -50,7 +61,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "side.to_move.b": "Black",
         "note_type.new": "(new)",
         "note_type.new_tip": "Created on import from the base note type.",
-        "table.kind_tip": "Decides the subdeck: opening lines, tactics or annotated games.",
+        "table.kind_tip": "Decides the subdeck: opening lines, tactics, annotated games or structures.",
         "table.side_tip": (
             "Your side in the chapter, from its orientation on Lichess (guessed for exported "
             "files). Changing it picks the note type."
@@ -214,7 +225,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "source.user_studies": "User's studies…",
         "study.downloading_n": "Downloading study {done} of {total}…",
         "study.load_errors": "Some studies couldn't be loaded:\n{errors}",
-        "study.summary_many": "<b>{count} studies</b> — {total} chapters: {exercises} exercises, {lines} opening lines, {games} full games, {empty} empty or unsupported.",
+        "study.summary_many": "<b>{count} studies</b> — {total} chapters: {exercises} exercises, {lines} opening lines, {games} full games, {structures} structures, {empty} empty or unsupported.",
         "study.status_counts": "In your collection: {new} new, {changed} changed, {same} imported.",
         "study.removed": "<a href=\"removed\">{count} imported chapters are no longer in the study</a>.",
         "table.status": "Status",
@@ -362,7 +373,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "study.download_failed": "Falha ao baixar o estudo.",
         "study.summary": (
             "<b>{study}</b> — {total} capítulos: {exercises} exercícios, {lines} linhas de abertura, "
-            "{games} partidas, {empty} vazios."
+            "{games} partidas, {structures} estruturas, {empty} vazios."
         ),
         "filter.include_games": "Incluir partidas completas",
         "filter.check_exercises": "Marcar exercícios e linhas",
@@ -376,6 +387,17 @@ STRINGS: dict[str, dict[str, str]] = {
         "kind.game": "Partida",
         "kind.line": "Linha de abertura",
         "kind.empty": "Vazio",
+        "kind.structure": "Estrutura",
+        "deck.structures": "Estruturas",
+        "filter.structures": "Estruturas",
+        "io.note_type": "Oclusão de imagem",
+        "note_type.io_tip": "O tipo de nota Oclusão de imagem do Anki: uma nota por estrutura, com 3 cartões.",
+        "side.structure_tip": (
+            "O seu lado, embaixo: o cartão 1 esconde as suas peças (monte a sua estrutura), "
+            "o 2 as do adversário, o 3 o nome da estrutura."
+        ),
+        "plan.new_io_type": "O tipo de nota Oclusão de imagem do Anki será adicionado.",
+        "structure.cards": "3 cartões: a sua estrutura, a do adversário e o nome. Os planos ficam no verso.",
         "side.white": "Brancas",
         "side.black": "Pretas",
         "side.both": "Os dois lados",
@@ -384,7 +406,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "side.to_move.b": "pretas",
         "note_type.new": "(novo)",
         "note_type.new_tip": "Criado na importação a partir do tipo de nota base.",
-        "table.kind_tip": "Decide o subdeck: linhas de abertura, táticas ou partidas comentadas.",
+        "table.kind_tip": "Decide o subdeck: linhas de abertura, táticas, partidas comentadas ou estruturas.",
         "table.side_tip": (
             "O seu lado no capítulo, pela orientação do capítulo no Lichess (estimado em "
             "arquivos exportados). Mudar o lado escolhe o tipo de nota."
@@ -549,7 +571,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "source.user_studies": "Estudos de um usuário…",
         "study.downloading_n": "Baixando o estudo {done} de {total}…",
         "study.load_errors": "Alguns estudos não puderam ser carregados:\n{errors}",
-        "study.summary_many": "<b>{count} estudos</b> — {total} capítulos: {exercises} exercícios, {lines} linhas de abertura, {games} partidas, {empty} vazios ou não suportados.",
+        "study.summary_many": "<b>{count} estudos</b> — {total} capítulos: {exercises} exercícios, {lines} linhas de abertura, {games} partidas, {structures} estruturas, {empty} vazios ou não suportados.",
         "study.status_counts": "Na sua coleção: {new} novos, {changed} alterados, {same} importados.",
         "study.removed": "<a href=\"removed\">{count} capítulos importados não estão mais no estudo</a>.",
         "table.status": "Situação",
