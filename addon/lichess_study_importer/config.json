@@ -10,6 +10,7 @@
   "strip_anno": true,
   "base_note_type": "",
   "lichess_token": "",
+  "lichess_token_user": "",
   "lichess_username": "",
   "puzzle_max": 50,
   "puzzle_failed_only": true,

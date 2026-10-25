@@ -41,10 +41,12 @@ from .ui_common import (
     plan_text,
     readonly_item,
     restore_columns,
+    lichess_token,
+    lichess_waiter,
     save_columns,
-    token_link,
     write_config,
 )
+from .token_dialog import edit_token
 
 COL_CHECK, COL_PUZZLE, COL_RATING, COL_THEMES, COL_RESULT, COL_STATUS = range(6)
 COLUMN_WIDTHS = {COL_CHECK: 28, COL_PUZZLE: 90, COL_RATING: 70, COL_THEMES: 300, COL_RESULT: 80}
@@ -52,19 +54,21 @@ COLUMNS_KEY = "puzzleImportColumns"
 REQUEST_PAUSE = 0.3  # seconds between puzzle requests, to stay under Lichess' rate limit
 
 
-def load_puzzles(entries: list[tuple[str, bool | None, dict | None]], progress) -> list[PuzzleCard]:
+def load_puzzles(
+    entries: list[tuple[str, bool | None, dict | None]], progress, wait=None
+) -> list[PuzzleCard]:
     """
     Cards for (puzzle id, your result, activity entry) items. Each puzzle is fetched
     with its game, to start the card before the opponent's last move; an activity
-    entry without it still gives a card from the puzzle position.
+    entry without it still gives a card from the puzzle position. wait: see lichess_api.
     """
     cards = []
     for done, (puzzle_id, win, entry) in enumerate(entries):
         progress(done, len(entries))
         try:
-            data = fetch_puzzle(puzzle_id)
-        except LichessError:
-            if entry is None:
+            data = fetch_puzzle(puzzle_id, wait=wait)
+        except LichessError as e:
+            if entry is None or e.key == "error.cancelled":
                 raise
             data = entry
         cards.append(puzzle_card(data, win))
@@ -92,29 +96,19 @@ class PuzzleImportPage(QWidget):
 
         layout = QVBoxLayout(self)
 
-        # --- Your puzzle activity ---
+        # --- Your puzzle activity (with the token of the window's bottom bar) ---
         activity = QHBoxLayout()
-        self.token_edit = QLineEdit(self.config.get("lichess_token", ""))
-        self.token_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.token_edit.setPlaceholderText(tr("puzzle.token_placeholder"))
-        self.token_edit.setToolTip(tr("puzzle.token_tip"))
         self.max_spin = QSpinBox()
         self.max_spin.setRange(1, 500)
         self.max_spin.setValue(int(self.config.get("puzzle_max", 50)))
         self.failed_only = QCheckBox(tr("puzzle.failed_only"))
         self.failed_only.setChecked(bool(self.config.get("puzzle_failed_only", True)))
         btn_activity = QPushButton(tr("puzzle.load_activity"))
+        btn_activity.setToolTip(tr("puzzle.token_tip"))
         btn_activity.clicked.connect(self.on_load_activity)
-        for widget, stretch in (
-            (QLabel(tr("token.label")), 0),
-            (self.token_edit, 1),
-            (token_link(), 0),
-            (QLabel(tr("puzzle.last")), 0),
-            (self.max_spin, 0),
-            (self.failed_only, 0),
-            (btn_activity, 0),
-        ):
-            activity.addWidget(widget, stretch)
+        for widget in (QLabel(tr("puzzle.last")), self.max_spin, self.failed_only, btn_activity):
+            activity.addWidget(widget)
+        activity.addStretch(1)
         layout.addLayout(activity)
 
         # --- Puzzle links ---
@@ -195,26 +189,33 @@ class PuzzleImportPage(QWidget):
 
     def run_loading(self, entries_op):
         """entries_op() -> [(puzzle id, win, activity entry)], then each puzzle is fetched."""
+        shown = {"done": 0, "total": 0}
+
+        def show(waiting: str = ""):
+            label = tr("puzzle.loading", done=shown["done"], total=shown["total"])
+            if waiting:
+                label = f"{label}\n{waiting}\n{tr('lichess.esc_cancels')}"
+            mw.progress.update(label=label, value=shown["done"], max=shown["total"])
 
         def progress(done, total):
-            mw.taskman.run_on_main(
-                lambda: mw.progress.update(
-                    label=tr("puzzle.loading", done=done, total=total), value=done, max=total
-                )
-            )
+            shown.update(done=done, total=total)
+            mw.taskman.run_on_main(show)
 
+        # A 429 is waited out in the progress window (Esc gives up)
+        wait = lichess_waiter(show, mw.progress.want_cancel)
         QueryOp(
             parent=self,
-            op=lambda col: load_puzzles(entries_op(), progress),
+            op=lambda col: load_puzzles(entries_op(), progress, wait),
             success=self.show_cards,
         ).failure(lambda e: showWarning(error_text(e), parent=self)).with_progress(
             tr("puzzle.loading", done=0, total="?")
         ).without_collection().run_in_background()
 
     def on_load_activity(self):
-        token = self.token_edit.text().strip()
+        token = lichess_token()
+        if not token and edit_token(self, tr("puzzle.token_needed")):
+            token = lichess_token()
         if not token:
-            showWarning(tr("puzzle.token_needed"), parent=self)
             return
         failed_only = self.failed_only.isChecked()
         max_entries = self.max_spin.value()
@@ -331,7 +332,6 @@ class PuzzleImportPage(QWidget):
         update_existing = self.update_existing.isChecked()
         self.config.update(
             {
-                "lichess_token": self.token_edit.text().strip(),
                 "puzzle_max": self.max_spin.value(),
                 "puzzle_failed_only": self.failed_only.isChecked(),
                 "puzzle_deck": "" if deck == self.default_deck else deck,

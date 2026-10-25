@@ -1,10 +1,14 @@
 """
-Qt pieces shared by the import pages: config, language, window and column layout kept
-in the Anki profile, the "Paste PGN" dialog, the board preview, the Lichess token link
-and the status colours.
+Qt pieces shared by the import pages: config and the saved Lichess token, language,
+window and column layout kept in the Anki profile, the wait after a Lichess 429, the
+"Paste PGN" dialog, the board preview and the status colours.
 """
 
 from __future__ import annotations
+
+import math
+import time
+from typing import Callable
 
 import anki.lang
 import aqt
@@ -28,10 +32,11 @@ from aqt.qt import (
     QVBoxLayout,
     QWidget,
 )
-from aqt.utils import openLink, restoreGeom, restoreHeader, saveGeom, saveHeader
+from aqt.utils import restoreGeom, restoreHeader, saveGeom, saveHeader
 
 from .chess_lib import chess
 from .i18n import resolve_language, set_language, tr
+from .lichess_api import Wait
 
 try:  # Anki ships PyQt6 with the SVG module; without it there is no board preview
     from PyQt6.QtSvgWidgets import QSvgWidget
@@ -43,6 +48,7 @@ TOKEN_URL = (
     "https://lichess.org/account/oauth/token/create"
     "?scopes[]=study:read&scopes[]=puzzle:read&description=AnkiChess%20importer"
 )
+TOKEN_KEYS = ("lichess_token", "lichess_token_user")
 # Status colours, readable on light and dark themes
 STATUS_COLORS = {
     "new": ("#2e7d32", "#81c784"),
@@ -55,7 +61,42 @@ def get_config() -> dict:
 
 
 def write_config(config: dict) -> None:
+    # The token is saved by its dialog alone (save_token): a page's older copy of the
+    # config keeps the one saved now
+    current = get_config()
+    config.update({key: current[key] for key in TOKEN_KEYS if key in current})
     mw.addonManager.writeConfig(__name__, config)
+
+
+def lichess_token() -> str:
+    """The saved Lichess token, read now (pages keep a copy of the config from when they opened)."""
+    return str(get_config().get("lichess_token", "")).strip()
+
+
+def save_token(token: str, user: str) -> None:
+    config = get_config()
+    config.update(lichess_token=token.strip(), lichess_token_user=user)
+    mw.addonManager.writeConfig(__name__, config)
+
+
+def lichess_waiter(show: Callable[[str], None], cancelled: Callable[[], bool] = lambda: False) -> Wait:
+    """
+    The wait of a Lichess request after a 429, run in the background: counts the seconds
+    down in show(text) on the main thread (show("") when done) and gives up if cancelled().
+    """
+
+    def wait(seconds: float, key: str) -> bool:
+        end = time.monotonic() + seconds
+        while (left := end - time.monotonic()) > 0:
+            if cancelled():
+                return False
+            text = tr(key, seconds=math.ceil(left))
+            mw.taskman.run_on_main(lambda text=text: show(text))
+            time.sleep(min(1.0, left))
+        mw.taskman.run_on_main(lambda: show(""))
+        return not cancelled()
+
+    return wait
 
 
 def apply_language() -> None:
@@ -165,14 +206,6 @@ def readonly_item(text: str, tip: str = "") -> QTableWidgetItem:
     if tip:
         item.setToolTip(tip)
     return item
-
-
-def token_link(parent: QWidget | None = None) -> QLabel:
-    """Link to Lichess' token form, with the study:read and puzzle:read scopes checked."""
-    label = QLabel(f'<a href="{TOKEN_URL}">{tr("token.create")}</a>', parent)
-    label.setToolTip(tr("token.create_tip"))
-    label.linkActivated.connect(openLink)
-    return label
 
 
 # --- Dialogs and widgets ---

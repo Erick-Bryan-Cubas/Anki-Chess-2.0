@@ -1,7 +1,8 @@
 """
 The AnkiChess import window: Studies, Games and Puzzles pages in tabs, with the update
-of the imported studies a click away. One menu entry instead of one per source; the
-pages share the config (token, root deck, note types) and stay open after importing.
+of the imported studies and the Lichess token a click away. One menu entry instead of
+one per source; the pages share the config (token, root deck, note types) and stay open
+after importing.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from .dialog import StudyImportPage
 from .i18n import tr
 from .puzzle_dialog import PuzzleImportPage
 from .study_updater import update_imported_studies
+from .token_dialog import TokenStatus
 from .ui_common import apply_language, restore_window, save_window
 
 WINDOW_KEY = "ankiChessImport"  # window size and position, kept in the Anki profile
@@ -42,6 +44,8 @@ class ImportWindow(QDialog):
         close = QPushButton(tr("button.close"))
         close.clicked.connect(self.reject)
         bottom.addWidget(update)
+        # The Lichess token of every page: private studies, puzzle activity, download limit
+        bottom.addWidget(TokenStatus(self))
         bottom.addStretch(1)
         bottom.addWidget(close)
         layout.addLayout(bottom)
