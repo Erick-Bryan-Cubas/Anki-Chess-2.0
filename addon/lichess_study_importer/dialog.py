@@ -63,6 +63,7 @@ from .pgn_split import (
     KIND_EXERCISE,
     KIND_GAME,
     KIND_LINE,
+    KIND_STRUCTURE,
     KIND_UNSUPPORTED,
     MODE_FLIPPED,
     MODE_STUDY,
@@ -70,6 +71,7 @@ from .pgn_split import (
     mode_for,
     split_games,
 )
+from .structures import StructureCard
 from .ui_common import (
     BoardPreview,
     ask_pgn,
@@ -88,10 +90,12 @@ KIND_KEYS = {
     KIND_EXERCISE: "kind.exercise",
     KIND_LINE: "kind.line",
     KIND_GAME: "kind.game",
+    KIND_STRUCTURE: "kind.structure",
     KIND_EMPTY: "kind.empty",
     KIND_UNSUPPORTED: "kind.unsupported",
 }
-CHAPTER_KINDS = (KIND_EXERCISE, KIND_LINE, KIND_GAME)  # the kind decides the subdeck
+# The kind decides the subdeck. Structures (no moves) keep theirs: an Image Occlusion note
+CHAPTER_KINDS = (KIND_EXERCISE, KIND_LINE, KIND_GAME)
 NOT_IMPORTABLE = (KIND_EMPTY, KIND_UNSUPPORTED)
 SIDES = (("w", "side.white"), ("b", "side.black"), (None, "side.both"))  # None: Study
 OTHER_SIDE = {"w": "b", "b": "w"}
@@ -126,6 +130,7 @@ QUICK_FILTERS = (
     ("filter.exercises", "kind", KIND_EXERCISE),
     ("filter.lines", "kind", KIND_LINE),
     ("filter.games", "kind", KIND_GAME),
+    ("filter.structures", "kind", KIND_STRUCTURE),
 )
 
 
@@ -156,6 +161,15 @@ class Row:
     def importable(self) -> bool:
         return self.kind not in NOT_IMPORTABLE
 
+    @property
+    def structure(self) -> bool:
+        return self.kind == KIND_STRUCTURE
+
+    @property
+    def editable_columns(self) -> tuple[int, ...]:
+        # A structure is always an Image Occlusion note; your side decides its masks
+        return (COL_SIDE,) if self.structure else CHOICE_COLUMNS
+
 
 class DeckItem(QTableWidgetItem):
     """Deck cell; an empty subdeck (the chapter goes to the study deck) says so when shown."""
@@ -178,7 +192,7 @@ class ChoiceDelegate(QStyledItemDelegate):
     def createEditor(self, parent, option, index):
         row = self.page.rows[index.row()]
         combo = QComboBox(parent)
-        for label, value in self.page.choices_for(index.column()):
+        for label, value in self.page.choices_for(index.column(), row):
             combo.addItem(label, value)
         values = [combo.itemData(i) for i in range(combo.count())]
         current = self.page.value_of(row, index.column())
@@ -291,6 +305,7 @@ class StudyImportPage(QWidget):
         self.choices = anki_ops.note_type_choices(self.base) if self.base else []
         self.choice_modes = {name: mode for name, mode, _ in self.choices}
         self.choice_exists = {name: exists for name, _, exists in self.choices}
+        self.refresh_io_type()
         base_name = self.base["name"] if self.base else "AnkiChess"
 
         layout = QVBoxLayout(self)
@@ -662,7 +677,14 @@ class StudyImportPage(QWidget):
                     by_study[group] = study
                     self.studies.append(study)
                 row = Row(chapter=ch, study=study, kind=decks.suggest_kind(ch), side=ch.player)
-                row.note_type = self.note_type_for_mode(mode_for(row.side, ch.side_to_move))
+                if row.structure:
+                    # You rebuild one side of it: yours, from the chapter's orientation,
+                    # or the side chosen when it was imported
+                    row.side = ch.player or ch.side_to_move
+                    row.side = anki_ops.structure_side(mw.col, StructureCard(ch, row.side)) or row.side
+                    row.note_type = self.io_name
+                else:
+                    row.note_type = self.note_type_for_mode(mode_for(row.side, ch.side_to_move))
                 if ch.dedupe_key in chapter_decks:
                     row.subdeck = chapter_decks[ch.dedupe_key]
                 self.rows.append(row)
@@ -673,7 +695,9 @@ class StudyImportPage(QWidget):
         self.refresh_statuses()
         include_games = self.include_games.isChecked()
         for row in self.rows:
-            wanted = row.kind in (KIND_EXERCISE, KIND_LINE) or (row.kind == KIND_GAME and include_games)
+            wanted = row.kind in (KIND_EXERCISE, KIND_LINE, KIND_STRUCTURE) or (
+                row.kind == KIND_GAME and include_games
+            )
             row.checked = row.importable and wanted and row.status != "same"
         self.find_removed_chapters()
         self.last_result, self.last_nids = "", []
@@ -705,6 +729,7 @@ class StudyImportPage(QWidget):
             exercises=counts[KIND_EXERCISE],
             lines=counts[KIND_LINE],
             games=counts[KIND_GAME],
+            structures=counts[KIND_STRUCTURE],
             empty=counts[KIND_EMPTY] + counts[KIND_UNSUPPORTED],
         )
         if len(self.studies) == 1:
@@ -732,9 +757,17 @@ class StudyImportPage(QWidget):
         """The first note type set up for a mode: the base one's variant, else another."""
         return next((name for name, m, _ in self.choices if m == mode), "")
 
+    def refresh_io_type(self):
+        """Anki's Image Occlusion note type, for structures (added on import if missing)."""
+        io = anki_ops.find_io_note_type(mw.col)
+        self.io_name = io["name"] if io else tr("io.note_type")
+        self.io_exists = io is not None
+
     def row_cards(self, row: Row) -> list[tuple[Chapter, bool]]:
         """(card, is a key move card) imported from a row, depending on the options."""
         ch = row.chapter
+        if row.structure:
+            return [(StructureCard(ch, row.side or ch.side_to_move), False)]
         if row.kind == KIND_LINE and self.split_lines.isChecked():
             if "split" not in row.cache:
                 row.cache["split"] = expand.split_variations(ch, self.strip_anno)
@@ -766,11 +799,12 @@ class StudyImportPage(QWidget):
 
     # --- Values of the choice cells ---
 
-    def choices_for(self, col: int) -> list[tuple[str, object]]:
+    def choices_for(self, col: int, row: Row | None = None) -> list[tuple[str, object]]:
         if col == COL_KIND:
             return [(tr(KIND_KEYS[k]), k) for k in CHAPTER_KINDS]
         if col == COL_SIDE:
-            return [(tr(key), side) for side, key in SIDES]
+            # A structure has your side and the opponent's, not both
+            return [(tr(key), side) for side, key in SIDES if side or not (row and row.structure)]
         return [
             (name if exists else f"{name} {tr('note_type.new')}", name) for name, _, exists in self.choices
         ]
@@ -793,7 +827,13 @@ class StudyImportPage(QWidget):
     def set_value(self, row: Row, col: int, value, rows: list[Row] | None = None):
         """A choice for a row (and the other selected rows): kind, side or note type."""
         for target in rows if rows is not None else self.targets(row):
-            if col == COL_KIND:
+            if col not in target.editable_columns or (target.structure and value is None):
+                continue
+            if target.structure:
+                # Your side is the one card 1 hides: another image and other masks
+                target.side = value
+                self.refresh_status(target)
+            elif col == COL_KIND:
                 target.kind = value
                 self.refresh_status(target)
             elif col == COL_SIDE:
@@ -878,11 +918,19 @@ class StudyImportPage(QWidget):
             for col in CHOICE_COLUMNS:
                 item = self.table.item(i, col)
                 item.setText(self.label_of(row, col))
-                item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEditable)
-            side_tip = tr("side.tooltip", side=tr(f"side.to_move.{row.chapter.side_to_move}"))
-            self.table.item(i, COL_SIDE).setToolTip(side_tip)
-            exists = self.choice_exists.get(row.note_type, True)
-            self.table.item(i, COL_NOTE_TYPE).setToolTip("" if exists else tr("note_type.new_tip"))
+                flags = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
+                if col in row.editable_columns:
+                    flags |= Qt.ItemFlag.ItemIsEditable
+                item.setFlags(flags)
+            if row.structure:
+                self.table.item(i, COL_SIDE).setToolTip(tr("side.structure_tip"))
+                tip = tr("note_type.io_tip") + ("" if self.io_exists else "\n" + tr("plan.new_io_type"))
+                self.table.item(i, COL_NOTE_TYPE).setToolTip(tip)
+            else:
+                side_tip = tr("side.tooltip", side=tr(f"side.to_move.{row.chapter.side_to_move}"))
+                self.table.item(i, COL_SIDE).setToolTip(side_tip)
+                exists = self.choice_exists.get(row.note_type, True)
+                self.table.item(i, COL_NOTE_TYPE).setToolTip("" if exists else tr("note_type.new_tip"))
 
             placement = self.placement(row)
             deck = self.table.item(i, COL_DECK)
@@ -993,11 +1041,17 @@ class StudyImportPage(QWidget):
                 (COL_SIDE, tr("table.side")),
                 (COL_NOTE_TYPE, tr("table.note_type")),
             ):
+                targets = [r for r in rows if col in r.editable_columns]
+                if not targets:
+                    continue
                 submenu = menu.addMenu(title)
-                for label, value in self.choices_for(col):
-                    action = submenu.addAction(label, lambda c=col, v=value: self.set_value(rows[0], c, v, rows))
+                only_structures = all(r.structure for r in targets)
+                for label, value in self.choices_for(col, targets[0] if only_structures else None):
+                    action = submenu.addAction(
+                        label, lambda c=col, v=value, t=targets: self.set_value(t[0], c, v, t)
+                    )
                     action.setCheckable(True)
-                    action.setChecked(all(self.value_of(r, col) == value for r in rows))
+                    action.setChecked(all(self.value_of(r, col) == value for r in targets))
             menu.addAction(tr("menu.rename_subdeck"), lambda: self.ask_subdeck(rows))
             menu.addAction(tr("menu.default_subdeck"), lambda: self.reset_subdecks(rows))
             menu.addSeparator()
@@ -1046,6 +1100,14 @@ class StudyImportPage(QWidget):
         caption = f"<b>{html.escape(row.chapter.name)}</b>"
         if game is None:
             self.preview.show_game(None, caption=caption)
+            return
+        if row.structure:
+            # The structure from your side, its plans, and the cards it makes
+            plans = textwrap.shorten(row.chapter.comment_text, 600, placeholder=" …")
+            if plans:
+                caption += "<br>" + html.escape(plans)
+            caption += "<br><small>" + tr("structure.cards") + "</small>"
+            self.preview.show_game(game, 0, row.side != "b", caption)
             return
         first = game.next()
         # The chapter's intro, without commands such as [%eval] or [%cal]
@@ -1167,10 +1229,14 @@ class StudyImportPage(QWidget):
             self.plan_label.setText("")
             return
         self.import_btn.setText(tr("button.import_plan", chapters=counts["chapters"], notes=counts["notes"]))
-        self.import_btn.setEnabled(self.base is not None)
+        # Structures only need Anki's own Image Occlusion note type
+        checked = self.checked_rows()
+        self.import_btn.setEnabled(self.base is not None or all(r.structure for r in checked))
         text = tr("plan.summary", **counts)
         if created:
             text += "<br>" + tr("plan.new_note_types", names=", ".join(created), base=self.base["name"])
+        if not self.io_exists and any(r.structure for r in checked):
+            text += "<br>" + tr("plan.new_io_type")
         self.plan_label.setText(f"<small>{text}</small>")
 
     # --- Import ---
@@ -1216,17 +1282,22 @@ class StudyImportPage(QWidget):
         base = self.base
         selected = self.import_cards(rows)
 
-        # Missing Flipped/Study note types are created up front (outside the undoable import)
+        # Missing Flipped/Study note types are created up front (outside the undoable
+        # import), and so is Anki's Image Occlusion note type for structures
         models = {}
         try:
-            for name in {name for _, name, _ in selected}:
+            for name in {name for card, name, _ in selected if not is_structure(card)}:
                 models[name] = mw.col.models.by_name(name) or anki_ops.ensure_mode_note_type(
                     base, self.choice_modes[name]
                 )
         except anki_ops.ChessImportError as e:
             showWarning(str(e), parent=self)
             return
-        cards = [(card, models[name], placement) for card, name, placement in selected]
+        io = anki_ops.io_note_type(mw.col) if any(is_structure(card) for card, _, _ in selected) else None
+        cards = [
+            (card, io if is_structure(card) else models[name], placement)
+            for card, name, placement in selected
+        ]
 
         update_existing = self.update_existing.isChecked()
         stats = {}
@@ -1248,8 +1319,12 @@ class StudyImportPage(QWidget):
             self.last_nids = stats.get("nids", [])
             tooltip(self.last_result, parent=mw)
             # Note types created now exist: no more "(new)"
-            self.choices = anki_ops.note_type_choices(base)
+            self.choices = anki_ops.note_type_choices(base) if base else []
             self.choice_exists = {name: exists for name, _, exists in self.choices}
+            self.refresh_io_type()
+            for row in self.rows:
+                if row.structure:
+                    row.note_type = self.io_name
             for row in rows:
                 row.checked = False
             self.refresh_statuses()
@@ -1262,6 +1337,10 @@ class StudyImportPage(QWidget):
             parent=self,
             op=lambda col: anki_ops.import_chapters(col, cards, update_existing, self.strip_anno, stats),
         ).success(on_success).run_in_background()
+
+
+def is_structure(card) -> bool:
+    return getattr(card, "is_structure", False)
 
 
 def offer_note_type_change(other: dict[str, list[int]] | None, parent=None):

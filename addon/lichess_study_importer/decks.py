@@ -5,6 +5,8 @@ Where each imported card goes: deck and extra tags.
                                         (+ tag <opening>::<family>::<variation>)
     <root>::<study>::Tactics            Lichess chapters starting from a FEN
     <root>::<study>::Annotated games    Lichess full games
+    <root>::<study>::Structures         Lichess structures (a FEN with no moves), as
+                                        Image Occlusion notes
     <root>::Openings::<family>          Chess.com opening, book moves, book lines (+ tag)
     <root>::My games::<error type>      Chess.com errors and missed mates
 
@@ -21,7 +23,7 @@ from dataclasses import dataclass, field
 from .chess_lib import chess
 from .i18n import tr
 from .openings import follow_book, load_book
-from .pgn_split import KIND_EXERCISE, KIND_GAME, KIND_LINE, Chapter
+from .pgn_split import KIND_EXERCISE, KIND_GAME, KIND_LINE, KIND_STRUCTURE, Chapter
 
 OPENING_KINDS = ("opening", "book", "book_line")  # game_analysis kinds filed by opening
 KIND_KEY_MOVE = "key_move"  # "find the move" card made from an annotated game (expand.py)
@@ -138,6 +140,8 @@ def section_name(kind: str) -> str:
         return tr("deck.lines")
     if kind == KIND_KEY_MOVE:
         return tr("deck.key_moves")
+    if kind == KIND_STRUCTURE:
+        return tr("deck.structures")
     return tr("deck.games") if kind == KIND_GAME else tr("deck.tactics")
 
 

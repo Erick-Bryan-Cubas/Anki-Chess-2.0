@@ -49,6 +49,7 @@ ORIENTATIONS = {"white": "w", "black": "b"}
 KIND_EXERCISE = "exercise"  # starts from a [FEN] position
 KIND_LINE = "line"  # from the start, no result: an opening line
 KIND_GAME = "game"  # from the start, with a result: an annotated game
+KIND_STRUCTURE = "structure"  # a [FEN] and no moves: a pawn structure and its plans
 KIND_EMPTY = "empty"
 KIND_UNSUPPORTED = "unsupported"  # a chess variant the template can't play (Chess960...)
 FINISHED_RESULTS = ("1-0", "0-1", "1/2-1/2")
@@ -106,7 +107,7 @@ class Chapter:
             return self.tags[ID_TAG]
         if self.study_id and self.chapter_id:
             return f"study/{self.study_id}/{self.chapter_id}"
-        if not has_moves(self.movetext):
+        if not has_moves(self.movetext) and not self.fen:
             return None
         parts = [self.tags.get(k, "") for k in ("Event", "Site", "Date", "Round", "White", "Black", "FEN")]
         identity = "\n".join([*parts, mainline_text(self.movetext)])
@@ -138,7 +139,9 @@ class Chapter:
         if self.variant.lower() not in SUPPORTED_VARIANTS:
             return KIND_UNSUPPORTED
         if not has_moves(self.movetext):
-            return KIND_EMPTY
+            # A position set up with no moves: a structure to remember (often only
+            # pawns, so not a position the board can play), with its plans if commented
+            return KIND_STRUCTURE if self.fen else KIND_EMPTY
         if self.fen:
             return KIND_EXERCISE
         return KIND_GAME if self.tags.get("Result") in FINISHED_RESULTS else KIND_LINE
@@ -164,6 +167,26 @@ class Chapter:
     @property
     def preview(self) -> str:
         return self.moves_preview(60)
+
+    @property
+    def comment_text(self) -> str:
+        """
+        Text of the chapter's comments (the plans of a structure), without commands or
+        annotator markers, keeping its line breaks.
+        """
+        texts = []
+        for comment in COMMENT_RE.findall(self.movetext):
+            text = COMMAND_RE.sub("", comment[1:-1])
+            lines = [" ".join(line.split()) for line in text.split("\n")]
+            text = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+            if text:
+                texts.append(text)
+        return "\n\n".join(texts)
+
+    @property
+    def commands(self) -> list[str]:
+        """The comment commands ([%csl Gd5], [%cal Gb7b5]...) of the chapter."""
+        return COMMAND_RE.findall(self.movetext)
 
     def moves_preview(self, limit: int) -> str:
         """Moves without comments, cut at limit characters."""

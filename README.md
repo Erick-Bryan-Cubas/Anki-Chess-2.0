@@ -83,6 +83,13 @@ The **Lichess studies** tab creates **one note per chapter**.
   - The side is the chapter's orientation on Lichess (studies loaded by link). For exported files it is guessed from the comments ("Jogam as brancas") or the result; opening lines and games without it are played on both sides.
   - The note type follows the side: `AnkiChess` when you make the first move, `AnkiChess Flipped` when the first move is the opponent's (played automatically, the board turned to your side), `AnkiChess Study` to play both sides. Missing ones are cloned from `AnkiChess` (or `base_note_type` in the add-on config) with `flipBoard`/`playBothSides` set; any other chess note type can also be picked.
   - New and changed chapters are selected; full games only with **Include full games**. Chapters of other chess variants (Chess960…) can't be imported.
+- **Structures**: a chapter with a `[FEN]` and no moves (a pawn structure, often without kings, with the plans of each side in its comment) becomes an Anki **Image Occlusion** note, in the study's **Structures** subdeck:
+  - The image is the board from your side (**You play**, the chapter's orientation on Lichess), with the annotator's highlighted squares and arrows, and the structure's name under it.
+  - It makes three cards. Card 1 hides your pieces, to rebuild your structure from the opponent's; card 2 hides the opponent's; card 3 hides the name, to recognize the structure.
+  - The masks cover every square but the pieces shown, so their shape doesn't give the answer away. The masks of the other cards stay visible ("hide one, guess one").
+  - The plans and a link to the chapter are on the back.
+  - Masks edited in Anki's mask editor (**Edit** on the card) are kept when the study is imported again, unless the structure, its name or your side changes.
+  - Uses Anki's own Image Occlusion note type (added if missing; Anki 23.10+, AnkiDroid 2.17+).
 - **Gamebook** chapters work as on Lichess: only the main line is the answer, a variation you play is a wrong move that shows its comment, and the opponent keeps to the main line. The template reads `[ChapterMode "gamebook"]` from the PGN.
 - Options:
   - **One note per variation**: each branch of an opening line becomes its own note, to drill every variation of a repertoire.
@@ -115,13 +122,14 @@ All the importers file cards under one root deck, set in the add-on config (`dec
 <root>::<study>::Tactics             Lichess chapters set up from a position
 <root>::<study>::Annotated games     Lichess full games (a result such as 1-0)
 <root>::<study>::Key moves           "find the move" notes from the games' ! and !! moves
+<root>::<study>::Structures          Lichess structures (a FEN with no moves), as Image Occlusion notes
 <root>::Openings::<family>           opening, book moves and book lines of your games
 <root>::My games::<error type>       blunders, mistakes, misses, inaccuracies, missed mates of your games
 <root>::Lichess puzzles              Lichess puzzles
 ```
 
 - Each Lichess study gets its own deck, named after the study (`StudyName`; the file name for PGNs without it). Once loaded, its deck can be renamed (**Study deck** field, a list picks the study when several are loaded) and so can each chapter's subdeck (double-click a **Deck** cell or press F2; with several rows selected, F2 renames them all). `::` creates levels, e.g. `Chess::Courses::Sicilian`; spaces around each level are trimmed and empty levels dropped, as Anki would otherwise name them `blank`. An empty subdeck files the chapter in the study deck itself. Renamed decks are kept for the next import of the same study (`study_decks` / `chapter_decks` in the config).
-- Lichess chapters are classified automatically: from a `[FEN]` → tactics, unless the position is in the opening catalog; no FEN and no result (`*`) → opening line; no FEN with a result → annotated game. The type can be changed per chapter.
+- Lichess chapters are classified automatically: from a `[FEN]` → tactics, unless the position is in the opening catalog; a `[FEN]` and no moves → structure; no FEN and no result (`*`) → opening line; no FEN with a result → annotated game. The type can be changed per chapter, except for structures.
 - Tags are hierarchical (`::` separates the levels, `_` replaces spaces): `<study>::<study name>::<chapter name>` (e.g. `estudo::#C105_-_Siciliana_O'Kelly:_Outras_opções::Capítulo_1`), `<opening>::<family>::<variation>` (e.g. `opening::Slav_Defense::Czech_Variation`, from the opening Lichess writes in the chapter or the catalog), `eco::<code>`, and the source (`lichess::study::<id>`, `lichess::puzzle::<theme>`…). When updating a note, the importer replaces the tags it wrote before and keeps yours.
 
 ## Games (Chess.com and Lichess)
