@@ -5,8 +5,8 @@ Where each imported card goes: deck and extra tags.
                                         (+ tag <opening>::<family>::<variation>)
     <root>::<study>::Tactics            Lichess chapters starting from a FEN
     <root>::<study>::Annotated games    Lichess full games
-    <root>::<study>::Structures         Lichess structures (a FEN with no moves), as
-                                        Image Occlusion notes
+    <root>::<study>::Structures         Lichess structures (a FEN with no moves),
+                                        rebuilt on the board
     <root>::Openings::<family>          Chess.com opening, book moves, book lines (+ tag)
     <root>::My games::<error type>      Chess.com errors and missed mates
 

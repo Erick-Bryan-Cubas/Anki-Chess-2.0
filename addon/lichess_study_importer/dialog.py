@@ -99,7 +99,7 @@ KIND_KEYS = {
     KIND_EMPTY: "kind.empty",
     KIND_UNSUPPORTED: "kind.unsupported",
 }
-# The kind decides the subdeck. Structures (no moves) keep theirs: an Image Occlusion note
+# The kind decides the subdeck. Structures (no moves) keep theirs: rebuilt on the board
 CHAPTER_KINDS = (KIND_EXERCISE, KIND_LINE, KIND_GAME)
 NOT_IMPORTABLE = (KIND_EMPTY, KIND_UNSUPPORTED)
 SIDES = (("w", "side.white"), ("b", "side.black"), (None, "side.both"))  # None: Study
@@ -172,7 +172,7 @@ class Row:
 
     @property
     def editable_columns(self) -> tuple[int, ...]:
-        # A structure is always an Image Occlusion note; your side decides its masks
+        # A structure is an AnkiChess note rebuilt from your side, whatever the note type
         return (COL_SIDE,) if self.structure else CHOICE_COLUMNS
 
 
@@ -310,7 +310,6 @@ class StudyImportPage(QWidget):
         self.choices = anki_ops.note_type_choices(self.base) if self.base else []
         self.choice_modes = {name: mode for name, mode, _ in self.choices}
         self.choice_exists = {name: exists for name, _, exists in self.choices}
-        self.refresh_io_type()
         base_name = self.base["name"] if self.base else "AnkiChess"
 
         layout = QVBoxLayout(self)
@@ -691,7 +690,7 @@ class StudyImportPage(QWidget):
                     # or the side chosen when it was imported
                     row.side = ch.player or ch.side_to_move
                     row.side = anki_ops.structure_side(mw.col, StructureCard(ch, row.side)) or row.side
-                    row.note_type = self.io_name
+                    row.note_type = self.structure_type
                 else:
                     row.note_type = self.note_type_for_mode(mode_for(row.side, ch.side_to_move))
                 if ch.dedupe_key in chapter_decks:
@@ -781,11 +780,10 @@ class StudyImportPage(QWidget):
         """The first note type set up for a mode: the base one's variant, else another."""
         return next((name for name, m, _ in self.choices if m == mode), "")
 
-    def refresh_io_type(self):
-        """Anki's Image Occlusion note type, for structures (added on import if missing)."""
-        io = anki_ops.find_io_note_type(mw.col)
-        self.io_name = io["name"] if io else tr("io.note_type")
-        self.io_exists = io is not None
+    @property
+    def structure_type(self) -> str:
+        """Note type of the structures: the base one (its side settings don't apply)."""
+        return self.base["name"] if self.base else ""
 
     def row_cards(self, row: Row) -> list[tuple[Chapter, bool]]:
         """(card, is a key move card) imported from a row, depending on the options."""
@@ -948,7 +946,7 @@ class StudyImportPage(QWidget):
                 item.setFlags(flags)
             if row.structure:
                 self.table.item(i, COL_SIDE).setToolTip(tr("side.structure_tip"))
-                tip = tr("note_type.io_tip") + ("" if self.io_exists else "\n" + tr("plan.new_io_type"))
+                tip = tr("note_type.structure_tip")
                 self.table.item(i, COL_NOTE_TYPE).setToolTip(tip)
             else:
                 side_tip = tr("side.tooltip", side=tr(f"side.to_move.{row.chapter.side_to_move}"))
@@ -1299,14 +1297,10 @@ class StudyImportPage(QWidget):
             self.plan_label.setText("")
             return
         self.import_btn.setText(tr("button.import_plan", chapters=counts["chapters"], notes=counts["notes"]))
-        # Structures only need Anki's own Image Occlusion note type
-        checked = self.checked_rows()
-        self.import_btn.setEnabled(self.base is not None or all(r.structure for r in checked))
+        self.import_btn.setEnabled(self.base is not None)
         text = tr("plan.summary", **counts)
         if created:
             text += "<br>" + tr("plan.new_note_types", names=", ".join(created), base=self.base["name"])
-        if not self.io_exists and any(r.structure for r in checked):
-            text += "<br>" + tr("plan.new_io_type")
         self.plan_label.setText(f"<small>{text}</small>")
 
     # --- Import ---
@@ -1352,22 +1346,17 @@ class StudyImportPage(QWidget):
         base = self.base
         selected = self.import_cards(rows)
 
-        # Missing Flipped/Study note types are created up front (outside the undoable
-        # import), and so is Anki's Image Occlusion note type for structures
+        # Missing Flipped/Study note types are created up front (outside the undoable import)
         models = {}
         try:
-            for name in {name for card, name, _ in selected if not is_structure(card)}:
+            for name in {name for _, name, _ in selected}:
                 models[name] = mw.col.models.by_name(name) or anki_ops.ensure_mode_note_type(
                     base, self.choice_modes[name]
                 )
         except anki_ops.ChessImportError as e:
             showWarning(str(e), parent=self)
             return
-        io = anki_ops.io_note_type(mw.col) if any(is_structure(card) for card, _, _ in selected) else None
-        cards = [
-            (card, io if is_structure(card) else models[name], placement)
-            for card, name, placement in selected
-        ]
+        cards = [(card, models[name], placement) for card, name, placement in selected]
 
         update_existing = self.update_existing.isChecked()
         stats = {}
@@ -1390,11 +1379,7 @@ class StudyImportPage(QWidget):
             # Note types created now exist: no more "(new)"
             self.choices = anki_ops.note_type_choices(base) if base else []
             self.choice_exists = {name: exists for name, _, exists in self.choices}
-            self.refresh_io_type()
             self.refresh_deck_names()
-            for row in self.rows:
-                if row.structure:
-                    row.note_type = self.io_name
             for row in rows:
                 row.checked = False
             self.refresh_statuses()
@@ -1408,9 +1393,6 @@ class StudyImportPage(QWidget):
             op=lambda col: anki_ops.import_chapters(col, cards, update_existing, self.strip_anno, stats),
         ).success(on_success).run_in_background()
 
-
-def is_structure(card) -> bool:
-    return getattr(card, "is_structure", False)
 
 
 def offer_note_type_change(other: dict[str, list[int]] | None, parent=None):

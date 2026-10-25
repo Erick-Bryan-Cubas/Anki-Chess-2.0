@@ -33,7 +33,7 @@ LEFT_FOR_LATER = ("error.rate_limited", "error.cancelled")
 def chapter_cards(ch, strip_anno: bool, col=None) -> list:
     """The chapter and the cards that may have been made from it, once each."""
     if ch.kind == KIND_STRUCTURE:
-        # An Image Occlusion note, for the side it was imported for
+        # Rebuilt from the side it was imported for
         card = StructureCard(ch, ch.player or ch.side_to_move)
         side = anki_ops.structure_side(col, card) if col is not None else None
         return [StructureCard(ch, side) if side else card]
