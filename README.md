@@ -173,6 +173,7 @@ The **Lichess puzzles** tab imports puzzles as cards: the opponent's last move i
 ## Build
 
 - Bundled: [python-chess](https://github.com/niklasf/python-chess) (GPL-3.0) in `vendor/`, and the [Lichess opening catalog](https://github.com/lichess-org/chess-openings) (CC0) in `data/openings/`.
+- License: the add-on is GPL-3.0-or-later, as python-chess requires (`addon/lichess_study_importer/LICENSE.txt`).
 
 ```bash
 npm run test:addon    # unit tests (pytest)
