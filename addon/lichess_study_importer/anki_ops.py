@@ -169,6 +169,38 @@ def ensure_mode_note_type(base: dict, mode: str) -> dict:
     return mm.by_name(name)
 
 
+def install_template(col, template):
+    """
+    Add the official AnkiChess template (template_install.download) to a collection without
+    an AnkiChess note type: its media files, then the AnkiChess note type made as the
+    Companion add-on makes it (name, fields, card, version tag), so the Companion finds it.
+    """
+    # Written into the folder as the Companion writes them: Anki's media API lowercases the
+    # names on Windows, and the card loads _ankiChess<version>.js on every device (AnkiDroid
+    # tells the cases apart)
+    folder = col.media.dir()
+    for name, data in template.media.items():
+        path = os.path.join(folder, name)
+        if os.path.exists(path):
+            # An older copy, maybe named in another case: removed, so the file gets this name
+            os.remove(path)
+        with open(path, "wb") as f:
+            f.write(data)
+    # Anki looks for changed media files when the folder's time changes
+    os.utime(folder)
+    mm = col.models
+    m = mm.new("AnkiChess")
+    for field_name in ("PGN", "textField"):
+        mm.add_field(m, mm.new_field(field_name))
+    card = mm.new_template("Card 1")
+    card["qfmt"], card["afmt"] = template.front, template.back
+    mm.add_template(m, card)
+    if template.css:
+        m["css"] = template.css
+    m[NOTE_TYPE_TAG] = "2.0"
+    return mm.add_dict(m)
+
+
 def build_note_fields(ch: Chapter, strip_anno: bool) -> tuple[str, str]:
     # Same format as the Companion example note: escaped text with <br> line breaks.
     # A structure's card shows the plans of its comment line by line.
