@@ -26,6 +26,7 @@
 
   let themeColors = $derived(BOARD_THEMES[userConfig.opts.boardTheme] || BOARD_THEMES['wood']);
   let showDevConfig = $state(false);
+  let showComments = $derived(boardMode === 'Viewer' || (userConfig.opts.frontText && !!userText));
 
   if (import.meta.env.DEV) {
     window.addEventListener('dev:toggleTemplateConfig', () => {
@@ -93,7 +94,7 @@
 <GameProvider {rawPgn} {boardMode}>
   <ErrorPopup bind:isHelpOpen />
   <div id="container" style="--board-light: {themeColors.light}; --board-dark: {themeColors.dark};">
-    {#if boardMode === 'Viewer' || (userConfig.opts.frontText && userText)}
+    {#if showComments}
       <div id="commentBox">
         {#if userText}
           <div id="userTextContainer">
@@ -104,6 +105,7 @@
           <div id="sticky-container">
             <div id="buttons-container">
               <ButtonsContainer />
+              <SettingsMenu bind:isHelpOpen inToolbar />
             </div>
             <div id="analysis-container">
               <EngineAnalysis />
@@ -112,11 +114,17 @@
           <div id="pgnViewer">
             <PgnViewer />
           </div>
+        {:else}
+          <!-- The front has no move buttons (they'd give the solution away): just the menu -->
+          <div id="sticky-container">
+            <div id="buttons-container" class="menu-only">
+              <SettingsMenu bind:isHelpOpen inToolbar />
+            </div>
+          </div>
         {/if}
       </div>
     {/if}
     <div id="board-container" class:player-bars={userConfig.opts.playerBars}>
-      <SettingsMenu bind:isHelpOpen />
       {#if userConfig.opts.playerBars}
         <PlayerBar position="top" />
       {/if}
@@ -126,6 +134,10 @@
       {/if}
       <PromotePopup />
     </div>
+    {#if !showComments}
+      <!-- No comment box for the menu: it floats beside the board, never over a square -->
+      <SettingsMenu bind:isHelpOpen />
+    {/if}
   </div>
 </GameProvider>
 
@@ -140,6 +152,7 @@
   $comment-box-width-calc: calc($max-width - var(--board-size) - calc($max-width * 0.03));
 
   #container {
+    position: relative; /* The menu sits in a corner of its grid area in landscape */
     margin: 0;
     margin-right: 15px;
     gap: 4px;
@@ -185,6 +198,11 @@
           border-bottom: var(--border-thin);
           background: var(--surface-secondary);
           padding: 4px;
+
+          // A lone menu goes to the end, as menus do in toolbars
+          &.menu-only {
+            justify-content: flex-end;
+          }
         }
       }
 
