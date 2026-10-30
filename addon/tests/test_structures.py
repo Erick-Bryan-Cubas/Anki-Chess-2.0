@@ -119,3 +119,33 @@ def test_structures_go_to_their_own_subdeck():
     assert place.deck == "Xadrez::QUICKSTART - Siciliana O'kelly::Estruturas"
     assert "estudo::QUICKSTART_-_Siciliana_O'kelly::Estrutura_I_(Najdorf)" in place.tags
     assert StructureCard(NAJDORF, "b").note_tags[:2] == ["lichess", "lichess::structure"]
+
+
+def load_anki_ops(monkeypatch):
+    """anki_ops with stand-ins for anki and aqt, which the tests don't install."""
+    stubs = {
+        "anki": {},
+        "anki.collection": {"AddNoteRequest": object},
+        "anki.utils": {"ids2str": str},
+        "aqt": {"mw": None},
+    }
+    for name, attrs in stubs.items():
+        if name not in sys.modules:
+            monkeypatch.setitem(sys.modules, name, types.SimpleNamespace(**attrs))
+    from lsi import anki_ops
+
+    return anki_ops
+
+
+def test_structures_need_a_template_that_rebuilds_them(tmp_path, monkeypatch):
+    anki_ops = load_anki_ops(monkeypatch)
+    col = types.SimpleNamespace(media=types.SimpleNamespace(dir=lambda: str(tmp_path)))
+    note_type = {"tmpls": [{"qfmt": '<script src="./_ankiChess1.3.00.js"></script>'}]}
+    script = tmp_path / "_ankiChess1.3.00.js"
+
+    assert not anki_ops.builds_structures(col, note_type)  # script missing from the media
+    script.write_text("mountChess();")
+    assert not anki_ops.builds_structures(col, note_type)  # a template without structures
+    script.write_text('if (tags.AnkiChessMode?.toLowerCase() === "structure") mountStructure();')
+    assert anki_ops.builds_structures(col, note_type)
+    assert not anki_ops.builds_structures(col, None)  # no AnkiChess note type

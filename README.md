@@ -100,6 +100,7 @@ The **Lichess studies** tab creates **one note per chapter**.
   - **Check** marks your pieces in green (right square) or red (wrong), and shows faded the ones still missing. You can fix them and check again.
   - The back shows the whole structure with your mistakes circled in red, the annotator's highlighted squares and arrows, and the plans.
   - The PGN keeps the chapter with `[AnkiChessMode "structure"]` and your side as `[Orientation]`; importing again keeps the side chosen for it. A structure PGN pasted by hand (a FEN without kings and no moves) opens the same way.
+  - The card needs an AnkiChess template that rebuilds structures. With an older one in the collection (its `_ankiChess….js` doesn't know `AnkiChessMode`), structures are listed but not imported, and the window says why.
 - **Gamebook** chapters work as on Lichess: only the main line is the answer, a variation you play is a wrong move that shows its comment, and the opponent keeps to the main line. The template reads `[ChapterMode "gamebook"]` from the PGN.
 - Options:
   - **One note per variation**: each branch of an opening line becomes its own note, to drill every variation of a repertoire.
