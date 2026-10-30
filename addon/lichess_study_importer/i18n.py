@@ -52,6 +52,14 @@ STRINGS: dict[str, dict[str, str]] = {
             "1 card: the opponent's pieces are shown and you place yours, from a palette that "
             "counts them. The back shows the whole structure, your mistakes and the plans."
         ),
+        "structure.needs_template": (
+            "{count} structures are not imported: the AnkiChess template in this collection "
+            "doesn't rebuild them on the board yet."
+        ),
+        "structure.needs_template_tip": (
+            "The AnkiChess template in this collection doesn't rebuild structures on the board "
+            "yet, so this chapter would open as a puzzle with no moves."
+        ),
         "side.white": "White",
         "side.black": "Black",
         "side.both": "Both sides",
@@ -446,6 +454,14 @@ STRINGS: dict[str, dict[str, str]] = {
         "structure.cards": (
             "1 cartão: as peças do adversário aparecem e você coloca as suas, a partir de uma "
             "paleta que conta as peças. O verso mostra a estrutura inteira, os seus erros e os planos."
+        ),
+        "structure.needs_template": (
+            "{count} estruturas não serão importadas: o template AnkiChess desta coleção ainda "
+            "não monta estruturas no tabuleiro."
+        ),
+        "structure.needs_template_tip": (
+            "O template AnkiChess desta coleção ainda não monta estruturas no tabuleiro: este "
+            "capítulo abriria como um exercício sem lances."
         ),
         "side.white": "Brancas",
         "side.black": "Pretas",

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import html
 import json
+import os
 import re
 
 from anki.collection import AddNoteRequest
@@ -29,6 +30,10 @@ from .structures import stored_side
 NOTE_TYPE_TAG = "ankiChessVersion"
 CONFIG_RE = re.compile(r"window\.USER_CONFIG\s*=\s*(\{[\s\S]*?\})\s*;")
 CONFIG_PLACEHOLDER = "// __USER_CONFIG__"
+# The template's script, and the tag its structure cards are found by: a template
+# without them opens a structure as a puzzle with no moves (or fails on a FEN without kings)
+TEMPLATE_SCRIPT_RE = re.compile(r"""src=["'](?:\./)?(_ankiChess[^"'/]*\.js)["']""")
+STRUCTURE_MARKER = b"AnkiChessMode"
 
 MODE_SUFFIX = {MODE_FLIPPED: "Flipped", MODE_STUDY: "Study"}
 MODE_CONFIG = {
@@ -188,6 +193,19 @@ def _search_text(text: str) -> str:
 def note_fields(card, strip_anno: bool) -> list[str]:
     """The fields a card fills: PGN and textField."""
     return list(build_note_fields(card, strip_anno))
+
+
+def builds_structures(col, m: dict | None) -> bool:
+    """Whether a note type's template rebuilds structure chapters on the board."""
+    for tmpl in m["tmpls"] if m else []:
+        match = TEMPLATE_SCRIPT_RE.search(tmpl["qfmt"])
+        if match:
+            try:
+                with open(os.path.join(col.media.dir(), match.group(1)), "rb") as f:
+                    return STRUCTURE_MARKER in f.read()
+            except OSError:
+                return False
+    return False
 
 
 def structure_side(col, card) -> str | None:

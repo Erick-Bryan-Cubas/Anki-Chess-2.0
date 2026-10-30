@@ -161,10 +161,11 @@ class Row:
     status: str = ""
     card_statuses: list[str] = field(default_factory=list)  # one per card of the row
     cache: dict = field(default_factory=dict)  # opening name, parsed game, cards
+    blocked: str = ""  # tooltip key of why it can't be imported (a template without structures)
 
     @property
     def importable(self) -> bool:
-        return self.kind not in NOT_IMPORTABLE
+        return self.kind not in NOT_IMPORTABLE and not self.blocked
 
     @property
     def structure(self) -> bool:
@@ -665,6 +666,7 @@ class StudyImportPage(QWidget):
         """(PGN text, source name, whole study?) of each loaded study or file."""
         study_decks = self.config.get("study_decks", {})
         chapter_decks = self.config.get("chapter_decks", {})
+        builds_structures = anki_ops.builds_structures(mw.col, self.base)
         self.studies, self.rows = [], []
         for text, source, complete in sources:
             by_study: dict[str, Study] = {}
@@ -691,6 +693,8 @@ class StudyImportPage(QWidget):
                     row.side = ch.player or ch.side_to_move
                     row.side = anki_ops.structure_side(mw.col, StructureCard(ch, row.side)) or row.side
                     row.note_type = self.structure_type
+                    if not builds_structures:
+                        row.blocked = "structure.needs_template_tip"
                 else:
                     row.note_type = self.note_type_for_mode(mode_for(row.side, ch.side_to_move))
                 if ch.dedupe_key in chapter_decks:
@@ -763,6 +767,9 @@ class StudyImportPage(QWidget):
         text += "<br>" + tr("study.status_counts", **statuses)
         if self.removed_nids:
             text += " " + tr("study.removed", count=len(self.removed_nids))
+        blocked = sum(r.structure and bool(r.blocked) for r in self.rows)
+        if blocked:
+            text += "<br>" + tr("structure.needs_template", count=blocked)
         if self.last_result:
             text += f"<br><b>{self.last_result}</b>"
             if self.last_nids:
@@ -930,7 +937,10 @@ class StudyImportPage(QWidget):
 
             if not row.importable:
                 # Nothing to import: plain text, nothing to choose
-                tip = tr("kind.unsupported_tip", variant=row.chapter.variant) if row.kind == KIND_UNSUPPORTED else ""
+                if row.kind == KIND_UNSUPPORTED:
+                    tip = tr("kind.unsupported_tip", variant=row.chapter.variant)
+                else:
+                    tip = tr(row.blocked) if row.blocked else ""
                 for col, text in ((COL_KIND, tr(KIND_KEYS[row.kind])), (COL_SIDE, "—"), (COL_NOTE_TYPE, "—")):
                     item = self.table.item(i, col)
                     item.setText(text)
