@@ -71,6 +71,8 @@ files generated in 'dist-anki'
 
 `addon/lichess_study_importer` is a separate Anki add-on that creates AnkiChess notes from Lichess studies, analysed games (Chess.com or Lichess) and Lichess puzzles.
 
+Install it from [AnkiWeb](https://ankiweb.net/shared/info/615602402): in Anki, `Tools > Add-ons > Get Add-ons…` and the code `615602402` (Anki 26.09 or later).
+
 - One window, `Tools > Import into AnkiChess…` (also in the Companion's `AnkiChess` menu when installed), with the **Lichess studies**, **Games** and **Lichess puzzles** tabs, the **Update imported Lichess studies** button and your **Lichess token**. It keeps its size, and each table its columns; the pages stay open after importing.
 - Interface in English (default) or Brazilian Portuguese: set `"language"` to `"en"`, `"pt-BR"` or `"auto"` (follow Anki's language) in `Tools > Add-ons > Config`.
 
