@@ -8,10 +8,10 @@ from aqt import gui_hooks, mw
 from aqt.qt import QAction
 
 from . import analysis_note
-from .anki_ops import fix_pgn_line_breaks, show_pgn_line_breaks
+from .anki_ops import apply_template_preview, fix_pgn_line_breaks, show_pgn_line_breaks
 from .i18n import tr
 from .import_window import show_import_window
-from .ui_common import apply_language
+from .ui_common import apply_language, preview_enabled
 
 
 def _find_ankichess_menu():
@@ -36,11 +36,28 @@ def setup_menu():
 # Runs after all add-ons are loaded, so the Companion menu already exists
 gui_hooks.main_window_did_init.append(setup_menu)
 
+def apply_preview(config: dict | None = None):
+    # The template preview shipped in the add-on, or back to the official one when turned off
+    if not mw.col:
+        return
+    try:
+        apply_template_preview(mw.col, preview_enabled(config))
+    except OSError as e:
+        print(f"AnkiChess template preview: {e}")
+
+
+def on_profile_open():
+    fix_pgn_line_breaks(mw.col)
+    apply_preview()
+
+
 # PGNs pasted in the editor with wrapped lines: shown with their line breaks right
 # away, and fixed in the collection before syncing so AnkiDroid reads them too
 gui_hooks.card_will_show.append(show_pgn_line_breaks)
-gui_hooks.profile_did_open.append(lambda: fix_pgn_line_breaks(mw.col))
+gui_hooks.profile_did_open.append(on_profile_open)
 gui_hooks.sync_will_start.append(lambda: fix_pgn_line_breaks(mw.col))
+# preview_template changed in Tools > Add-ons > Config
+mw.addonManager.setConfigUpdatedAction(__name__, apply_preview)
 
 # "New card from this position" on the back of a card: the Add window with that PGN
 gui_hooks.webview_will_set_content.append(analysis_note.add_flag)

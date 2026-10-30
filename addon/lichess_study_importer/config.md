@@ -1,4 +1,10 @@
 - **language**: interface language. `"en"` (default), `"pt-BR"`, or `"auto"` to follow Anki's interface language. The menu entry updates after restarting Anki; the dialog updates the next time it opens.
+- **preview_template**: `true` (default) makes the AnkiChess note types load the preview of the
+  AnkiChess template shipped in this add-on, with the improvements proposed to the AnkiChess project
+  and not released there yet. Only the script the cards load changes; their HTML, styling and
+  settings stay. It applies while the official template is the version the preview builds on: a
+  newer official version (installed by the Companion add-on) is kept. `false` goes back to the
+  official script.
 - **deck_root**: root deck for everything imported (set here; the import windows don't ask for it).
   Empty = `Chess` (English) or `Xadrez` (pt-BR). Each Lichess study goes to
   `<root>::<study>::Opening lines`, `::Tactics` and `::Annotated games` (opening lines are tagged

@@ -144,7 +144,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "template.missing": (
             "<b>This collection has no AnkiChess note type yet.</b> Install the official "
             "AnkiChess template: it is downloaded from the AnkiChess project on GitHub "
-            "(a few MB, with the Stockfish the cards analyse with). The AnkiChess Companion "
+            "(a few MB, with the Stockfish the cards analyse with). Then this add-on applies "
+            "its preview of the improvements proposed to AnkiChess. The AnkiChess Companion "
             "add-on is optional: it keeps the template up to date."
         ),
         "template.install": "Install the AnkiChess template",
@@ -559,7 +560,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "template.missing": (
             "<b>Esta coleção ainda não tem um tipo de nota AnkiChess.</b> Instale o template "
             "oficial do AnkiChess: ele é baixado do projeto AnkiChess no GitHub (alguns MB, "
-            "com o Stockfish que analisa nos cartões). O add-on AnkiChess Companion é "
+            "com o Stockfish que analisa nos cartões). Depois, este add-on aplica a sua "
+            "prévia das melhorias propostas ao AnkiChess. O add-on AnkiChess Companion é "
             "opcional: ele mantém o template atualizado."
         ),
         "template.install": "Instalar o template AnkiChess",

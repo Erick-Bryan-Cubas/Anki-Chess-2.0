@@ -80,6 +80,15 @@ Install it from [AnkiWeb](https://ankiweb.net/shared/info/615602402): in Anki, `
 
 The add-on works on its own: when the collection has no AnkiChess note type, the window offers **Install the AnkiChess template**. It downloads the latest release of this project from GitHub, as the Companion does: the card's script, HTML and CSS, and the Stockfish the cards analyse with (a few MB, written into the media folder). It then adds the `AnkiChess` note type as the Companion makes it (fields, card and `ankiChessVersion` tag), so the [Companion](https://ankiweb.net/shared/info/1300975327), if installed, finds it and keeps it up to date.
 
+### Template preview
+
+The package published on AnkiWeb also carries a preview of the AnkiChess template built from this repository: the card improvements proposed to [TowelSniffer/Anki-Chess-2.0](https://github.com/TowelSniffer/Anki-Chess-2.0) and not released there yet, so trying them takes only installing the add-on.
+
+- On every profile open the add-on writes it into the media folder (`_ankiChess<version>-preview-<build>.js`, a new name each build so AnkiDroid doesn't keep a cached copy) and points the AnkiChess note types at it. Only their `<script src>` changes: their HTML, styling and settings stay.
+- It applies to note types on the official version it builds on (1.3.00). When the Companion installs a newer official version, that one is kept: the improvements are in it, or a newer preview follows.
+- `"preview_template": false` in `Tools > Add-ons > Config` goes back to the official script.
+- `npm run build:addon` builds the template (`npm run build:anki-media`) and puts it in the package's `preview/`.
+
 ### Lichess token
 
 A personal API access token of your Lichess account (Preferences › API access tokens), set once with **Lichess token…** at the bottom of the import window and used by every tab:

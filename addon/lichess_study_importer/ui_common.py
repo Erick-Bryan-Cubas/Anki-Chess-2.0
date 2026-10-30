@@ -68,6 +68,11 @@ def write_config(config: dict) -> None:
     mw.addonManager.writeConfig(__name__, config)
 
 
+def preview_enabled(config: dict | None = None) -> bool:
+    """Whether the AnkiChess note types use the template preview shipped in the add-on."""
+    return bool((get_config() if config is None else config).get("preview_template", True))
+
+
 def lichess_token() -> str:
     """The saved Lichess token, read now (pages keep a copy of the config from when they opened)."""
     return str(get_config().get("lichess_token", "")).strip()

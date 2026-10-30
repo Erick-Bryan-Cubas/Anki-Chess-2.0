@@ -8,12 +8,13 @@ import html
 import json
 import os
 import re
+import shutil
 
 from anki.collection import AddNoteRequest
 from anki.utils import ids2str
 from aqt import mw
 
-from . import decks
+from . import decks, template_preview
 from .i18n import STRINGS, tr
 from .note_info import chapter_details
 from .pgn_field import (
@@ -199,6 +200,57 @@ def install_template(col, template):
         m["css"] = template.css
     m[NOTE_TYPE_TAG] = "2.0"
     return mm.add_dict(m)
+
+
+def apply_template_preview(col, enabled: bool) -> int:
+    """
+    Point the AnkiChess note types at the template preview shipped in the add-on, or back
+    at the official script when it is turned off (see template_preview.py). Returns how
+    many note types changed.
+    """
+    preview = template_preview.bundled() if enabled else None
+    if enabled and not preview:
+        return 0  # a source checkout: no preview shipped
+    folder = col.media.dir()
+
+    def in_media(name: str) -> bool:
+        return os.path.exists(os.path.join(folder, name))
+
+    changed, loaded = [], set()
+    for m in col.models.all():
+        if not is_chess_note_type(m):
+            continue
+        edited = False
+        for tmpl in m["tmpls"]:
+            for key in ("qfmt", "afmt"):
+                current = template_preview.script_of(tmpl[key])
+                if not current:
+                    continue
+                script = template_preview.target(current, preview, in_media)
+                if script != current:
+                    tmpl[key] = template_preview.with_script(tmpl[key], script)
+                    edited = True
+                loaded.add(script)
+        if edited:
+            changed.append(m)
+
+    # Written into the folder like the template (install_template), names kept as they are
+    touched = False
+    if preview in loaded and not in_media(preview):
+        shutil.copyfile(os.path.join(template_preview.PREVIEW_DIR, preview), os.path.join(folder, preview))
+        touched = True
+    # Previews no note type loads any more (all of them when turned off), but not a newer
+    # one, synced from a device whose add-on is already updated
+    for name in os.listdir(folder):
+        if template_preview.PREVIEW_RE.match(name) and name not in loaded:
+            if preview is None or template_preview.preview_key(name) <= template_preview.preview_key(preview):
+                os.remove(os.path.join(folder, name))
+                touched = True
+    if touched:
+        os.utime(folder)
+    for m in changed:
+        col.models.update_dict(m)
+    return len(changed)
 
 
 def build_note_fields(ch: Chapter, strip_anno: bool) -> tuple[str, str]:

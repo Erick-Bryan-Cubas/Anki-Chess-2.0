@@ -19,7 +19,7 @@ from .i18n import tr
 from .puzzle_dialog import PuzzleImportPage
 from .study_updater import update_imported_studies
 from .token_dialog import TokenStatus
-from .ui_common import apply_language, error_text, restore_window, save_window
+from .ui_common import apply_language, error_text, preview_enabled, restore_window, save_window
 
 WINDOW_KEY = "ankiChessImport"  # window size and position, kept in the Anki profile
 TAB_STUDIES, TAB_GAMES, TAB_PUZZLES = range(3)
@@ -90,9 +90,17 @@ class ImportWindow(QDialog):
             )
 
         def on_downloaded(template):
-            CollectionOp(
-                parent=self, op=lambda col: anki_ops.install_template(col, template)
-            ).success(lambda _: on_installed(template.version)).run_in_background()
+            preview = preview_enabled()
+
+            def install(col):
+                changes = anki_ops.install_template(col, template)
+                # The add-on's template preview, as on every profile open
+                anki_ops.apply_template_preview(col, preview)
+                return changes
+
+            CollectionOp(parent=self, op=install).success(
+                lambda _: on_installed(template.version)
+            ).run_in_background()
 
         def on_installed(version: str):
             self.template_bar.hide()

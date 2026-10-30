@@ -121,25 +121,8 @@ def test_structures_go_to_their_own_subdeck():
     assert StructureCard(NAJDORF, "b").note_tags[:2] == ["lichess", "lichess::structure"]
 
 
-def load_anki_ops(monkeypatch):
-    """anki_ops with stand-ins for anki and aqt, which the tests don't install."""
-    stubs = {
-        "anki": {},
-        "anki.collection": {"AddNoteRequest": object},
-        "anki.utils": {"ids2str": str},
-        "aqt": {"mw": None},
-    }
-    for name, attrs in stubs.items():
-        if name not in sys.modules:
-            monkeypatch.setitem(sys.modules, name, types.SimpleNamespace(**attrs))
-    from lsi import anki_ops
-
-    return anki_ops
-
-
-def test_structures_need_a_template_that_rebuilds_them(tmp_path, monkeypatch):
-    anki_ops = load_anki_ops(monkeypatch)
-    col = types.SimpleNamespace(media=types.SimpleNamespace(dir=lambda: str(tmp_path)))
+def test_structures_need_a_template_that_rebuilds_them(tmp_path, anki_ops):
+    col =types.SimpleNamespace(media=types.SimpleNamespace(dir=lambda: str(tmp_path)))
     note_type = {"tmpls": [{"qfmt": '<script src="./_ankiChess1.3.00.js"></script>'}]}
     script = tmp_path / "_ankiChess1.3.00.js"
 
