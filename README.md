@@ -74,6 +74,10 @@ files generated in 'dist-anki'
 - One window, `Tools > Import into AnkiChess…` (also in the Companion's `AnkiChess` menu when installed), with the **Lichess studies**, **Games** and **Lichess puzzles** tabs, the **Update imported Lichess studies** button and your **Lichess token**. It keeps its size, and each table its columns; the pages stay open after importing.
 - Interface in English (default) or Brazilian Portuguese: set `"language"` to `"en"`, `"pt-BR"` or `"auto"` (follow Anki's language) in `Tools > Add-ons > Config`.
 
+### AnkiChess template
+
+The add-on works on its own: when the collection has no AnkiChess note type, the window offers **Install the AnkiChess template**. It downloads the latest release of this project from GitHub, as the Companion does: the card's script, HTML and CSS, and the Stockfish the cards analyse with (a few MB, written into the media folder). It then adds the `AnkiChess` note type as the Companion makes it (fields, card and `ankiChessVersion` tag), so the [Companion](https://ankiweb.net/shared/info/1300975327), if installed, finds it and keeps it up to date.
+
 ### Lichess token
 
 A personal API access token of your Lichess account (Preferences › API access tokens), set once with **Lichess token…** at the bottom of the import window and used by every tab:

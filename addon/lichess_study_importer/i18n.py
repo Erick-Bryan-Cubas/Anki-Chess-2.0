@@ -139,8 +139,19 @@ STRINGS: dict[str, dict[str, str]] = {
         "button.cancel": "Cancel",
         "warn.no_note_types": (
             "<b>No AnkiChess note type found.</b> Install the AnkiChess template "
-            "(apkg or Companion add-on) before importing."
+            "with the button at the top of this window before importing."
         ),
+        "template.missing": (
+            "<b>This collection has no AnkiChess note type yet.</b> Install the official "
+            "AnkiChess template: it is downloaded from the AnkiChess project on GitHub "
+            "(a few MB, with the Stockfish the cards analyse with). The AnkiChess Companion "
+            "add-on is optional: it keeps the template up to date."
+        ),
+        "template.install": "Install the AnkiChess template",
+        "template.downloading": "Downloading the AnkiChess template… {done} of {total} MB",
+        "template.installed": "AnkiChess template {version} installed.",
+        "template.download_failed": "Could not download the AnkiChess template: {reason}",
+        "template.bad_release": "The AnkiChess release on GitHub has no template files.",
         "warn.read_file": "Could not read the file:\n{error}",
         "warn.invalid_url": "Enter a Lichess study link (lichess.org/study/…).",
         "warn.no_chapters": "No chapters found in the PGN.",
@@ -543,8 +554,19 @@ STRINGS: dict[str, dict[str, str]] = {
         "button.cancel": "Cancelar",
         "warn.no_note_types": (
             "<b>Nenhum note type AnkiChess encontrado.</b> Instale o template AnkiChess "
-            "(apkg ou Companion Add-on) antes de importar."
+            "pelo botão no alto desta janela antes de importar."
         ),
+        "template.missing": (
+            "<b>Esta coleção ainda não tem um tipo de nota AnkiChess.</b> Instale o template "
+            "oficial do AnkiChess: ele é baixado do projeto AnkiChess no GitHub (alguns MB, "
+            "com o Stockfish que analisa nos cartões). O add-on AnkiChess Companion é "
+            "opcional: ele mantém o template atualizado."
+        ),
+        "template.install": "Instalar o template AnkiChess",
+        "template.downloading": "Baixando o template AnkiChess… {done} de {total} MB",
+        "template.installed": "Template AnkiChess {version} instalado.",
+        "template.download_failed": "Não foi possível baixar o template AnkiChess: {reason}",
+        "template.bad_release": "O release do AnkiChess no GitHub não tem os arquivos do template.",
         "warn.read_file": "Não foi possível ler o arquivo:\n{error}",
         "warn.invalid_url": "Informe um link de estudo do Lichess (lichess.org/study/…).",
         "warn.no_chapters": "Nenhum capítulo encontrado no PGN.",
