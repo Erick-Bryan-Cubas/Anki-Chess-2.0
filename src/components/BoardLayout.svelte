@@ -11,12 +11,15 @@
     showComments,
     comments,
     board,
+    outside,
   }: {
     themeColors: { light: string; dark: string };
     playerBars?: boolean;
     showComments: boolean;
     comments: Snippet;
     board: Snippet;
+    // In the layout but outside the board (the menu, when there is no comment box)
+    outside?: Snippet;
   } = $props();
 </script>
 
@@ -29,6 +32,7 @@
   <div id="board-container" class:player-bars={playerBars}>
     {@render board()}
   </div>
+  {@render outside?.()}
 </div>
 
 <style lang="scss">
@@ -42,6 +46,7 @@
   $comment-box-width-calc: calc($max-width - var(--board-size) - calc($max-width * 0.03));
 
   #container {
+    position: relative; /* The menu sits in a corner of its grid area in landscape */
     margin: 0;
     margin-right: 15px;
     gap: 4px;

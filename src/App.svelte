@@ -32,6 +32,9 @@
   let showFrontComments = $derived(
     boardMode !== 'Viewer' && userConfig.opts.frontComments && hasPgnComments(rawPgn),
   );
+  let showComments = $derived(
+    boardMode === 'Viewer' || (userConfig.opts.frontText && !!userText) || showFrontComments,
+  );
 
   if (import.meta.env.DEV) {
     window.addEventListener('dev:toggleTemplateConfig', () => {
@@ -101,12 +104,20 @@
   <BoardLayout
     {themeColors}
     playerBars={userConfig.opts.playerBars}
-    showComments={boardMode === 'Viewer' || (userConfig.opts.frontText && !!userText) || showFrontComments}
+    {showComments}
   >
     {#snippet comments()}
       {#if userText}
         <div id="userTextContainer">
           <div id="textField">{@html userText}</div>
+        </div>
+      {/if}
+      {#if boardMode !== 'Viewer'}
+        <!-- The front has no move buttons (they'd give the solution away): just the menu -->
+        <div id="sticky-container">
+          <div id="buttons-container" class="menu-only">
+            <SettingsMenu bind:isHelpOpen inToolbar />
+          </div>
         </div>
       {/if}
       {#if showFrontComments}
@@ -116,6 +127,7 @@
         <div id="sticky-container">
           <div id="buttons-container">
             <ButtonsContainer />
+            <SettingsMenu bind:isHelpOpen inToolbar />
           </div>
           <div id="analysis-container">
             <EngineAnalysis />
@@ -127,7 +139,6 @@
       {/if}
     {/snippet}
     {#snippet board()}
-      <SettingsMenu bind:isHelpOpen />
       {#if userConfig.opts.playerBars}
         <PlayerBar position="top" />
       {/if}
@@ -136,6 +147,12 @@
         <PlayerBar position="bottom" />
       {/if}
       <PromotePopup />
+    {/snippet}
+    {#snippet outside()}
+      {#if !showComments}
+        <!-- No comment box for the menu: it floats beside the board, never over a square -->
+        <SettingsMenu bind:isHelpOpen />
+      {/if}
     {/snippet}
   </BoardLayout>
 </GameProvider>
@@ -162,6 +179,11 @@
       border-bottom: var(--border-thin);
       background: var(--surface-secondary);
       padding: 4px;
+
+      // A lone menu goes to the end, as menus do in toolbars
+      &.menu-only {
+        justify-content: flex-end;
+      }
     }
   }
 
