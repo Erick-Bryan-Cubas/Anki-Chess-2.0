@@ -4,14 +4,15 @@ Creates AnkiChess notes from Lichess studies, from analysed Chess.com and Liches
 and from Lichess puzzles, all in one import window (Tools > Import into AnkiChess).
 """
 
+import os
+
 from aqt import gui_hooks, mw
 from aqt.qt import QAction
 
-from . import analysis_note
+from . import analysis_note, template_preview
 from .anki_ops import apply_template_preview, fix_pgn_line_breaks, show_pgn_line_breaks
 from .i18n import tr
 from .import_window import show_import_window
-from .template_options_dialog import show_template_options
 from .ui_common import apply_language, preview_enabled
 
 
@@ -27,16 +28,11 @@ def setup_menu():
     apply_language()
     action = QAction(tr("menu.import"), mw)
     action.triggered.connect(lambda: show_import_window())
-    # The card's helps (hints, refutation, suggested answer button) for each note type
-    options = QAction(tr("menu.template_options"), mw)
-    options.triggered.connect(lambda: show_template_options())
     mw.form.menuTools.addAction(action)
-    mw.form.menuTools.addAction(options)
     chess_menu = _find_ankichess_menu()
     if chess_menu:
         chess_menu.addSeparator()
         chess_menu.addAction(action)
-        chess_menu.addAction(options)
 
 
 # Runs after all add-ons are loaded, so the Companion menu already exists
@@ -57,6 +53,17 @@ def on_profile_open():
     apply_preview()
 
 
+def preview_in_companion_pages(web_content, context):
+    # Manage chessRs Notes (the Companion) runs the template's script: the preview's, so it
+    # shows and saves the preview's settings for each note type (hints, refutation...)
+    if "addon-" not in web_content.body or not mw.col or not preview_enabled():
+        return
+    preview = template_preview.bundled()
+    # Written into the media folder on profile open; without it the page would have no script
+    if preview and os.path.exists(os.path.join(mw.col.media.dir(), preview)):
+        web_content.body = template_preview.companion_page(web_content.body, preview)
+
+
 # PGNs pasted in the editor with wrapped lines: shown with their line breaks right
 # away, and fixed in the collection before syncing so AnkiDroid reads them too
 gui_hooks.card_will_show.append(show_pgn_line_breaks)
@@ -68,3 +75,4 @@ mw.addonManager.setConfigUpdatedAction(__name__, apply_preview)
 # "New card from this position" on the back of a card: the Add window with that PGN
 gui_hooks.webview_will_set_content.append(analysis_note.add_flag)
 gui_hooks.webview_did_receive_js_message.append(analysis_note.on_js_message)
+gui_hooks.webview_will_set_content.append(preview_in_companion_pages)

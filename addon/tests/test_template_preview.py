@@ -144,3 +144,42 @@ def test_nothing_happens_without_a_preview_shipped(tmp_path, monkeypatch, anki_o
     col = collection(tmp_path, {"AnkiChess": OFFICIAL})
     assert anki_ops.apply_template_preview(col, True) == 0
     assert col.models.script("AnkiChess") == OFFICIAL
+
+
+# Manage chessRs Notes, as the Companion builds it: the script is added after a short wait
+COMPANION_PAGE = """
+<link rel="stylesheet" href="_ankiChess1.3.00.css">
+<div id="chessRs-root" data-mode="addon-settings" style="width: 100vw;"></div>
+<script>
+    window.__ADDON_STATE__ = [];
+    setTimeout(function() {
+        var script = document.createElement('script');
+        script.src = "_ankiChess1.3.00.js";
+        document.body.appendChild(script);
+    }, 100);
+</script>
+"""
+
+
+def test_the_companion_note_manager_runs_the_preview():
+    page = tp.companion_page(COMPANION_PAGE, PREVIEW)
+    assert f'script.src = "{PREVIEW}";' in page
+    assert '"_ankiChess1.3.00.js"' not in page
+    # The rest of the page stays
+    assert 'data-mode="addon-settings"' in page and "__ADDON_STATE__" in page
+
+
+def test_the_companion_help_runs_the_preview_too():
+    page = COMPANION_PAGE.replace("addon-settings", "addon-about")
+    assert PREVIEW in tp.companion_page(page, PREVIEW)
+
+
+def test_other_pages_and_versions_are_left_alone():
+    # A card, not a Companion page
+    card = front(OFFICIAL)
+    assert tp.companion_page(card, PREVIEW) == card
+    # A newer official version than the preview builds on
+    newer = COMPANION_PAGE.replace("1.3.00", "1.3.01")
+    assert tp.companion_page(newer, PREVIEW) == newer
+    # The preview turned off or not shipped
+    assert tp.companion_page(COMPANION_PAGE, None) == COMPANION_PAGE

@@ -14,6 +14,9 @@ their <script src>: their HTML, styling and settings stay.
   Companion installs a newer official version, that one is kept: the improvements are in
   it, or a newer preview follows.
 - Turned off (preview_template in the config), note types go back to the official script.
+- The Companion's Manage chessRs Notes runs the template's script too: it gets the preview,
+  so the settings it shows and saves for each note type include the preview's (hints,
+  refutation, answer button...).
 
 Pure Python (no aqt imports) so the build script and the tests can use it.
 """
@@ -83,3 +86,24 @@ def target(current: str, preview: str | None, in_media: Callable[[str], bool]) -
     if PREVIEW_RE.match(current) and in_media(official_of(current)):
         return official_of(current)
     return current
+
+
+# The Companion's pages that run the template's script: Manage chessRs Notes and its help
+COMPANION_PAGE_RE = re.compile(r"""data-mode=["']addon-(?:settings|about)["']""")
+QUOTED_OFFICIAL_RE = re.compile(r"""(["'])(_ankiChess(\d+(?:\.\d+)+)\.js)\1""")
+
+
+def companion_page(body: str, preview: str | None) -> str:
+    """
+    A Companion page (Manage chessRs Notes, its help) loading the preview instead of the
+    official script it builds on, so it shows and saves the preview's settings too.
+    """
+    if not preview or not COMPANION_PAGE_RE.search(body):
+        return body
+    base = PREVIEW_RE.match(preview).group(1)
+
+    def swap(match: re.Match) -> str:
+        quote = match.group(1)
+        return f"{quote}{preview}{quote}" if match.group(3) == base else match.group(0)
+
+    return QUOTED_OFFICIAL_RE.sub(swap, body)

@@ -26,10 +26,11 @@ from .pgn_field import (
 )
 from .pgn_split import CHAPTER_URL_RE, ID_TAG, MODE_FLIPPED, MODE_PUZZLE, MODE_STUDY, Chapter
 from .structures import stored_side
-from .template_options import CONFIG_RE, write_config
 
-# Same marker used by the AnkiChess Companion add-on
+# Same markers used by the AnkiChess Companion add-on
 NOTE_TYPE_TAG = "ankiChessVersion"
+CONFIG_RE = re.compile(r"window\.USER_CONFIG\s*=\s*(\{[\s\S]*?\})\s*;")
+CONFIG_PLACEHOLDER = "// __USER_CONFIG__"
 # The template's script, and the tag its structure cards are found by: a template
 # without them opens a structure as a puzzle with no moves (or fails on a FEN without kings)
 TEMPLATE_SCRIPT_RE = re.compile(r"""src=["'](?:\./)?(_ankiChess[^"'/]*\.js)["']""")
@@ -134,10 +135,19 @@ def note_type_choices(base: dict) -> list[tuple[str, str, bool]]:
 
 
 def _set_template_config(qfmt: str, overrides: dict) -> str:
-    result = write_config(qfmt, overrides)
-    if result is None:
-        raise ChessImportError(tr("warn.no_user_config"))
-    return result
+    match = CONFIG_RE.search(qfmt)
+    if match:
+        try:
+            config = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            config = {}
+        config.update(overrides)
+        repl = f"window.USER_CONFIG = {json.dumps(config, indent=2)};"
+        return qfmt[: match.start()] + repl + qfmt[match.end() :]
+    if CONFIG_PLACEHOLDER in qfmt:
+        repl = f"window.USER_CONFIG = {json.dumps(overrides, indent=2)};"
+        return qfmt.replace(CONFIG_PLACEHOLDER, repl)
+    raise ChessImportError(tr("warn.no_user_config"))
 
 
 def ensure_mode_note_type(base: dict, mode: str) -> dict:
