@@ -99,3 +99,24 @@ for (const vp of viewports) {
     });
   }
 }
+
+// The hint button goes with the menu: at the top of the comment box, or floating with it
+for (const vp of viewports) {
+  for (const [where, config, holder] of [
+    ['in the comment box', { frontText: true, frontComments: false }, '#commentBox #buttons-container.menu-only'],
+    ['floating', { frontText: false, frontComments: false }, '#floating-tools'],
+  ] as const) {
+    test(`front: the hint button sits next to the menu, ${where} (${vp.name})`, async ({ page }) => {
+      await load(page, vp, config, 'Puzzle');
+      const hint = page.locator(`${holder} #hint-button`);
+      await expect(hint).toBeVisible();
+      await expect(page.locator(`${holder} #global-settings`)).toBeVisible();
+
+      const hintBox = (await hint.boundingBox())!;
+      const menuBox = (await page.locator('#global-settings button').boundingBox())!;
+      expect(overlaps(hintBox, menuBox)).toBe(false);
+      expect(overlaps(hintBox, (await page.locator('.board-wrapper').boundingBox())!)).toBe(false);
+      expect(inside(hintBox, vp)).toBe(true);
+    });
+  }
+}

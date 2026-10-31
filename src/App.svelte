@@ -10,6 +10,7 @@
   import HelpWrapper from '$components/HelpWrapper.svelte';
   import ErrorPopup from '$components/ErrorPopup.svelte';
   import SettingsMenu from '$components/SettingsMenu.svelte';
+  import HintButton from '$components/HintButton.svelte';
   import TemplateConfig from '$components/TemplateConfig.svelte';
   import BoardLayout from '$components/BoardLayout.svelte';
   import { BOARD_THEMES } from '$utils/themeData';
@@ -113,9 +114,10 @@
         </div>
       {/if}
       {#if boardMode !== 'Viewer'}
-        <!-- The front has no move buttons (they'd give the solution away): just the menu -->
+        <!-- The front has no move buttons (they'd give the solution away): the hint and the menu -->
         <div id="sticky-container">
           <div id="buttons-container" class="menu-only">
+            <HintButton />
             <SettingsMenu bind:isHelpOpen inToolbar />
           </div>
         </div>
@@ -150,8 +152,11 @@
     {/snippet}
     {#snippet outside()}
       {#if !showComments}
-        <!-- No comment box for the menu: it floats beside the board, never over a square -->
-        <SettingsMenu bind:isHelpOpen />
+        <!-- No comment box for the hint and the menu: they float beside the board, never over a square -->
+        <div id="floating-tools">
+          <HintButton />
+          <SettingsMenu bind:isHelpOpen />
+        </div>
       {/if}
     {/snippet}
   </BoardLayout>
@@ -180,10 +185,31 @@
       background: var(--surface-secondary);
       padding: 4px;
 
-      // A lone menu goes to the end, as menus do in toolbars
+      // The front's few tools go to the end, as menus do in toolbars
       &.menu-only {
         justify-content: flex-end;
       }
+    }
+  }
+
+  /*
+   * Without the comment box, outside the board in a bottom corner. Landscape: in the comment
+   * box's grid area (#container in BoardLayout), just left of the board. Portrait: the screen's
+   * corner, under the board, within thumb reach.
+   */
+  #floating-tools {
+    display: flex;
+    align-items: center;
+    position: absolute;
+    grid-area: one;
+    right: 0;
+    bottom: 0;
+    margin: 8px;
+    z-index: 50; /* Under the popups */
+
+    @media (orientation: portrait) {
+      position: fixed;
+      bottom: env(safe-area-inset-bottom, 0px);
     }
   }
 
