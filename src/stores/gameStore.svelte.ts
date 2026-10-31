@@ -5,6 +5,7 @@ import type {
   CustomPgnGame,
   CustomPgnMove,
   CustomShape,
+  GradeSuggestion,
   PgnPath,
   BoardModes,
   PuzzleScored,
@@ -68,8 +69,13 @@ export class GameStore {
   // The reply punishing a wrong move, shown for a moment before the move is taken back
   refutation = $state<{ from: Square; to: Square } | null>(null);
   isRefuting = $state(false);
+  // On the back: the answer button the front's result suggests
+  gradeSuggestion = $state<GradeSuggestion | null>(null);
 
   // --- Private State ---
+  #startedAt = Date.now();
+  #solveSeconds = $state<number | null>(null);
+  #playedPuzzle = false; // the front was a puzzle, for the back in the same page
   #flipBoolean: boolean; // Board orientation
   #storedScore: PuzzleScored | null = null;
   #trackedPathKey: string | undefined;
@@ -214,6 +220,19 @@ export class GameStore {
       const puzzledScored = this.puzzleScore && isPuzzleMode;
       if (puzzledScored) this.#storage.set('chess_puzzle_score', this.puzzleScore!.toString());
     });
+
+    // How long the puzzle took, once solved
+    $effect(() => {
+      if (this.isPuzzleComplete && this.#solveSeconds === null) {
+        this.#solveSeconds = Math.round((Date.now() - this.#startedAt) / 1000);
+      }
+    });
+
+    // The answer button for the back, kept up to date while solving (Again until solved)
+    $effect(() => {
+      if (!/^(Puzzle|Study)$/.test(this.boardMode)) return;
+      this.#storage.set('chess_puzzle_grade', JSON.stringify(this.frontGrade));
+    });
   }
 
   /*
@@ -285,6 +304,20 @@ export class GameStore {
     }
     this.#storedScore = null;
     return null;
+  }
+
+  // The answer button the puzzle's result suggests: Again until solved, Hard with any help
+  get frontGrade(): GradeSuggestion {
+    const score = this.puzzleScore;
+    const seconds = this.#solveSeconds;
+    if (score === 'fail') return { grade: 1, reason: 'failed', seconds };
+    if (!score) return { grade: 1, reason: 'unsolved', seconds: null };
+    if (this.hasMadeMistake) return { grade: 2, reason: 'mistake', seconds };
+    if (this.usedHint) return { grade: 2, reason: 'hint', seconds };
+    if (this.timerStore.isOutOfTime) return { grade: 2, reason: 'slow', seconds };
+    const easyTime = this.config.easyTime;
+    if (easyTime && seconds !== null && seconds <= easyTime) return { grade: 4, reason: 'fast', seconds };
+    return { grade: 3, reason: 'solved', seconds };
   }
 
   // caches the string key (prevents repeated .join() calls)
@@ -463,6 +496,9 @@ export class GameStore {
    */
 
   setBoardMode(boardMode: BoardModes) {
+    // The back shown in the same page as the front (no reload): the suggestion comes from memory
+    if (boardMode === 'Viewer' && this.#playedPuzzle) this.gradeSuggestion = this.frontGrade;
+    this.#playedPuzzle = /^(Puzzle|Study)$/.test(boardMode);
     this.timerStore.reset();
     if (boardMode !== 'Viewer') {
       this.#storage.clearGame();
@@ -527,9 +563,19 @@ export class GameStore {
       const storedMirror = this.#storage.get('chess_mirrorState');
       if (storedMirror && this.config.mirror) mirrorState = storedMirror as MirrorState;
       if (!this.config.storePgnPath) this.pgnPath = [];
+
+      // The front's suggested answer button (none when the front wasn't a puzzle)
+      const storedGrade = this.#storage.get('chess_puzzle_grade');
+      try {
+        this.gradeSuggestion = storedGrade ? JSON.parse(storedGrade) : null;
+      } catch {
+        this.gradeSuggestion = null;
+      }
+
       // Clear storage after 'Viewer' load
       this.#storage.clearGame();
     } else if (/^(Puzzle|Study)$/.test(this.boardMode)) {
+      this.#playedPuzzle = true;
       if (this.boardMode === 'Puzzle') {
         if (this.config.mirror) {
           // Trapdoor for Playwright tests
@@ -539,6 +585,10 @@ export class GameStore {
           this.#storage.set('chess_mirrorState', `${mirrorState}`);
         }
       }
+    } else {
+      // Not a puzzle (AI): no answer button to suggest, not even a previous card's
+      this.#playedPuzzle = false;
+      this.#storage.remove('chess_puzzle_grade');
     }
 
     this.rootGame = undefined;
@@ -632,6 +682,9 @@ export class GameStore {
     this.usedHint = false;
     this.refutation = null;
     this.isRefuting = false;
+    this.gradeSuggestion = null;
+    this.#startedAt = Date.now();
+    this.#solveSeconds = null;
     this.#destroyTimeouts();
   }
 
