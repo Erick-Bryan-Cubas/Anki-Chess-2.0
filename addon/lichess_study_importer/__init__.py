@@ -11,6 +11,7 @@ from . import analysis_note
 from .anki_ops import apply_template_preview, fix_pgn_line_breaks, show_pgn_line_breaks
 from .i18n import tr
 from .import_window import show_import_window
+from .template_options_dialog import show_template_options
 from .ui_common import apply_language, preview_enabled
 
 
@@ -26,11 +27,16 @@ def setup_menu():
     apply_language()
     action = QAction(tr("menu.import"), mw)
     action.triggered.connect(lambda: show_import_window())
+    # The card's helps (hints, refutation, suggested answer button) for each note type
+    options = QAction(tr("menu.template_options"), mw)
+    options.triggered.connect(lambda: show_template_options())
     mw.form.menuTools.addAction(action)
+    mw.form.menuTools.addAction(options)
     chess_menu = _find_ankichess_menu()
     if chess_menu:
         chess_menu.addSeparator()
         chess_menu.addAction(action)
+        chess_menu.addAction(options)
 
 
 # Runs after all add-ons are loaded, so the Companion menu already exists
