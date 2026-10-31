@@ -12,7 +12,7 @@
       /^(Puzzle|Study)$/.test(gameStore.boardMode) &&
       !gameStore.isPuzzleComplete,
   );
-  const disabled = $derived(!gameStore.hintMove || gameStore.hintLevel > 2);
+  const disabled = $derived(!gameStore.hintMove || gameStore.hintLevel > 2 || gameStore.isRefuting);
 
   function handleKeydown(e: KeyboardEvent) {
     const typing = (e.target as HTMLElement | null)?.closest('input, textarea, [contenteditable]');
