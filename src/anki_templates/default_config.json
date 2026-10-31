@@ -15,8 +15,6 @@
   "acceptVariations": true,
   "hints": true,
   "refutation": true,
-  "autoGrade": "suggest",
-  "easyTime": 0,
   "playBothSides": false,
   "timer": 10000,
   "increment": 1000,

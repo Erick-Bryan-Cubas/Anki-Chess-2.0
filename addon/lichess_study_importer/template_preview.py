@@ -16,7 +16,7 @@ their <script src>: their HTML, styling and settings stay.
 - Turned off (preview_template in the config), note types go back to the official script.
 - The Companion's Manage chessRs Notes runs the template's script too: it gets the preview,
   so the settings it shows and saves for each note type include the preview's (hints,
-  refutation, answer button...).
+  refutation, board size...).
 
 Pure Python (no aqt imports) so the build script and the tests can use it.
 """
