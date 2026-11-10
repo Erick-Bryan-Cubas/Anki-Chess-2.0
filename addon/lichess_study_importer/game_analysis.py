@@ -15,7 +15,6 @@ Pure Python (no aqt imports); the engine is passed in so tests can use any UCI e
 from __future__ import annotations
 
 import hashlib
-import math
 import re
 from collections import Counter
 from dataclasses import dataclass, field
@@ -23,6 +22,7 @@ from typing import Callable
 
 from .chess_lib import chess
 from .chesscom import ERROR_LABELS, LABEL_NAGS, game_id_from_headers, game_link, move_label
+from .game_stats import GameStats, collect_stats, win_percent, wins_from_pgn
 from .i18n import tr
 from .lichess_api import parse_game_url as parse_lichess_game
 from .openings import follow_book, lines_from, load_book
@@ -89,12 +89,6 @@ class GameCard:
 
     def pgn(self, strip_anno: bool = True) -> str:
         return self.body
-
-
-def win_percent(score: chess.engine.PovScore | chess.engine.Score) -> float:
-    """Lichess win chance (0-100) for a score seen from the side of interest."""
-    cp = score.score(mate_score=10000)
-    return 50 + 50 * (2 / (1 + math.exp(-0.00368208 * cp)) - 1)
 
 
 def format_score(score: chess.engine.Score) -> str:
@@ -207,11 +201,27 @@ def analyze_game(
     engine=None,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> list[GameCard]:
+    return analyze_game_with_stats(game, options, engine, on_progress)[0]
+
+
+def analyze_game_with_stats(
+    game: chess.pgn.Game,
+    options: AnalysisOptions,
+    engine=None,
+    on_progress: Callable[[int, int], None] | None = None,
+    official: dict | None = None,
+) -> tuple[list[GameCard], GameStats]:
+    """
+    The game's cards and its metrics (game_stats.py). With an engine every move of yours
+    after the theory is scanned, even when no error card is wanted (metrics only).
+    official: Lichess' own accuracy and acpl for your side, when known.
+    """
     meta = _Game(game)
     nodes = list(game.mainline())
     moves = [n.move for n in nodes]
     start = game.board()
     cards: list[GameCard] = []
+    user = options.user_color
 
     book = follow_book(start, moves)
     if KIND_OPENING in options.kinds and book.last_book_ply >= 4:
@@ -226,37 +236,52 @@ def analyze_game(
     if (
         KIND_BOOK in options.kinds
         and book.deviation_ply is not None
-        and boards[book.deviation_ply].turn == options.user_color
+        and boards[book.deviation_ply].turn == user
     ):
         cards.append(_book_card(meta, boards, moves, nodes, book))
 
     if KIND_BOOK_LINE in options.kinds:
-        cards.extend(_book_line_cards(meta, boards, moves, book.last_book_ply, options.user_color))
+        cards.extend(_book_line_cards(meta, boards, moves, book.last_book_ply, user))
 
-    if not options.kinds & set(ENGINE_KINDS):
-        return cards
-
+    wins = wins_from_pgn(game, user)
+    eval_source = "eval" if any(w is not None for w in wins) else None
+    want_errors = bool(options.kinds & set(ENGINE_KINDS))
     labeled = any(move_label(n) in ERROR_LABELS for n in nodes)
-    user_plies = [
-        i for i in range(book.last_book_ply, len(moves)) if boards[i].turn == options.user_color
-    ]
+    user_plies = [i for i in range(book.last_book_ply, len(moves)) if boards[i].turn == user]
     if engine is None:
         # Lichess games analysed on the server: the errors and best moves are in the PGN
-        if has_server_analysis(game):
+        if want_errors and has_server_analysis(game):
             for ply in user_plies:
                 card = _annotated_error_card(meta, boards, moves, nodes, ply, options)
                 if card:
                     cards.append(card)
-        return cards
-    for done, ply in enumerate(user_plies):
+    else:
+        eval_source = "engine"
+        lead = book.last_book_ply
+        if lead < len(moves) and boards[lead].turn != user:
+            # The opponent leaves the theory: the position before its move, to judge that move
+            info = engine.analyse(boards[lead], chess.engine.Limit(time=options.move_time))
+            wins[lead] = win_percent(info["score"].pov(user))
+        for done, ply in enumerate(user_plies):
+            if on_progress:
+                on_progress(done, len(user_plies))
+            best_score, played_score = _scan(boards[ply], moves[ply], options, engine)
+            wins[ply] = win_percent(best_score)
+            wins[ply + 1] = win_percent(played_score)
+            if not want_errors:
+                continue
+            card = _error_card(
+                meta, boards, moves, nodes, ply, options, engine, labeled, best_score, played_score
+            )
+            if card:
+                cards.append(card)
         if on_progress:
-            on_progress(done, len(user_plies))
-        card = _error_card(meta, boards, moves, nodes, ply, options, engine, labeled)
-        if card:
-            cards.append(card)
-    if on_progress:
-        on_progress(len(user_plies), len(user_plies))
-    return cards
+            on_progress(len(user_plies), len(user_plies))
+    if eval_source is None and labeled:
+        eval_source = "labels"
+
+    stats = collect_stats(game, meta.source, meta.game_id, user, wins, book, eval_source, official)
+    return cards, stats
 
 
 def _opening_card(meta: _Game, start: chess.Board, moves, opening: str | None) -> GameCard:
@@ -395,23 +420,30 @@ def _score_of(infos, move: chess.Move, color: chess.Color):
     return None
 
 
-def _error_card(meta: _Game, boards, moves, nodes, ply, options, engine, labeled) -> GameCard | None:
+def _scan(board: chess.Board, played: chess.Move, options, engine):
+    """Quick scan of a position: (best score, score of the move played), both yours."""
+    user = options.user_color
+    scan = engine.analyse(board, chess.engine.Limit(time=options.move_time), multipv=3)
+    best_score = scan[0]["score"].pov(user)
+    played_score = _score_of(scan, played, user)
+    if played_score is None:
+        info = engine.analyse(board, chess.engine.Limit(time=options.move_time), root_moves=[played])
+        played_score = info["score"].pov(user)
+    return best_score, played_score
+
+
+def _error_card(
+    meta: _Game, boards, moves, nodes, ply, options, engine, labeled, best_score, played_score
+) -> GameCard | None:
     board = boards[ply]
     played = moves[ply]
     user = options.user_color
     label = move_label(nodes[ply])
 
-    scan = engine.analyse(board, chess.engine.Limit(time=options.move_time), multipv=3)
-    best_score = scan[0]["score"].pov(user)
     best_mate = best_score.mate()
     mate_chance = best_mate is not None and 0 < best_mate <= options.max_mate
     if labeled and label not in ERROR_LABELS and not mate_chance:
         return None
-
-    played_score = _score_of(scan, played, user)
-    if played_score is None:
-        info = engine.analyse(board, chess.engine.Limit(time=options.move_time), root_moves=[played])
-        played_score = info["score"].pov(user)
 
     played_mate = played_score.mate()
     if mate_chance and not (played_mate is not None and played_mate > 0):

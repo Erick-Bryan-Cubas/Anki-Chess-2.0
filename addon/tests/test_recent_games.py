@@ -64,3 +64,14 @@ def test_merge_most_recent_first():
     assert [g.source for g in games] == ["lichess", "chesscom"]
     # Someone else's game: no side, no outcome
     assert recent_games.from_lichess(LICHESS, "nobody").outcome is None
+
+
+def test_lichess_official_accuracy_of_your_side():
+    data = dict(LICHESS)
+    data["players"] = {
+        "white": {"user": {"name": "Rival"}, "analysis": {"accuracy": 70, "acpl": 50}},
+        "black": {"user": {"name": "Me"}, "analysis": {"accuracy": 88, "acpl": 21, "blunder": 0}},
+    }
+    assert recent_games.from_lichess(data, "me").official == {"accuracy": 88, "acpl": 21}
+    assert recent_games.from_lichess(LICHESS, "me").official is None  # not analysed
+    assert recent_games.from_lichess(data, "someone").official is None  # not your game

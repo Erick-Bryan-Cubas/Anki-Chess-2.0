@@ -13,6 +13,7 @@ from . import analysis_note, template_preview
 from .anki_ops import apply_template_preview, fix_pgn_line_breaks, show_pgn_line_breaks
 from .i18n import tr
 from .import_window import show_import_window
+from .performance_dialog import show_performance
 from .ui_common import apply_language, preview_enabled
 
 
@@ -28,11 +29,15 @@ def setup_menu():
     apply_language()
     action = QAction(tr("menu.import"), mw)
     action.triggered.connect(lambda: show_import_window())
+    performance = QAction(tr("menu.performance"), mw)
+    performance.triggered.connect(lambda: show_performance())
     mw.form.menuTools.addAction(action)
+    mw.form.menuTools.addAction(performance)
     chess_menu = _find_ankichess_menu()
     if chess_menu:
         chess_menu.addSeparator()
         chess_menu.addAction(action)
+        chess_menu.addAction(performance)
 
 
 # Runs after all add-ons are loaded, so the Companion menu already exists

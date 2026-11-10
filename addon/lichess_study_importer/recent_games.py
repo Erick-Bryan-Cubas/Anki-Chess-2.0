@@ -29,6 +29,7 @@ class RecentGame:
     analysed: bool  # Lichess server analysis in the PGN
     pgn: str
     user_color: bool | None = None  # chess.WHITE / chess.BLACK: the side the user played
+    official: dict | None = None  # Lichess' accuracy and acpl of the user's side, when analysed
 
     @property
     def outcome(self) -> str | None:
@@ -63,6 +64,13 @@ def from_lichess(data: dict, username: str) -> RecentGame:
         result = "1-0" if winner == "white" else "0-1"
     else:
         result = "1/2-1/2" if data.get("status") in ("draw", "stalemate") else "*"
+    user_color = _user_color(white, black, username)
+    official = None
+    if user_color is not None:
+        side = players.get("white" if user_color == chess.WHITE else "black", {})
+        analysis = side.get("analysis") or {}
+        if "accuracy" in analysis or "acpl" in analysis:
+            official = {"accuracy": analysis.get("accuracy"), "acpl": analysis.get("acpl")}
     return RecentGame(
         source="lichess",
         url=f"https://lichess.org/{data['id']}",
@@ -73,7 +81,8 @@ def from_lichess(data: dict, username: str) -> RecentGame:
         speed=data.get("speed", ""),
         analysed="analysis" in data or "[%eval" in data.get("pgn", ""),
         pgn=data.get("pgn", ""),
-        user_color=_user_color(white, black, username),
+        user_color=user_color,
+        official=official,
     )
 
 

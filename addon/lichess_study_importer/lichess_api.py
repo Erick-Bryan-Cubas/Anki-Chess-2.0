@@ -201,11 +201,13 @@ def fetch_puzzle(puzzle_id: str, wait: Wait | None = None) -> dict:
     return json.loads(_get(f"{API}/puzzle/{puzzle_id}", wait=wait))
 
 
-def fetch_puzzle_activity(token: str, max_entries: int = 100) -> list[dict]:
-    """Your latest puzzles, most recent first: {"date", "win", "puzzle": {...}} (puzzle:read)."""
-    return _ndjson(
-        _get(f"{API}/puzzle/activity?max={max_entries}", token, accept="application/x-ndjson")
-    )
+def fetch_puzzle_activity(token: str, max_entries: int = 100, before: int | None = None) -> list[dict]:
+    """
+    Your latest puzzles, most recent first: {"date", "win", "puzzle": {...}} (puzzle:read).
+    before: only attempts before this time (ms), to page back through the history.
+    """
+    url = f"{API}/puzzle/activity?max={max_entries}" + (f"&before={before}" if before else "")
+    return _ndjson(_get(url, token, accept="application/x-ndjson"))
 
 
 # --- Games ---
@@ -218,11 +220,14 @@ def parse_game_url(text: str) -> str | None:
 
 
 def fetch_user_games(username: str, max_games: int = 30, token: str = "") -> list[dict]:
-    """A user's latest games, with their PGN (and server analysis when requested)."""
+    """
+    A user's latest games, with their PGN (and server analysis when requested), clocks,
+    and Lichess' accuracy of each side in players.<color>.analysis when analysed.
+    """
     return _ndjson(
         _get(
             f"{API}/games/user/{username.strip()}?max={max_games}&pgnInJson=true&evals=true"
-            "&literate=true&opening=true&clocks=false",
+            "&literate=true&opening=true&clocks=true&accuracy=true",
             token,
             accept="application/x-ndjson",
         )
@@ -232,10 +237,11 @@ def fetch_user_games(username: str, max_games: int = 30, token: str = "") -> lis
 def fetch_game_pgn(game_id: str, token: str = "") -> str:
     """
     A game's PGN with the server analysis, when it was requested on Lichess: evals,
-    ?/??/?! marks with "X was best" comments and the best line as a variation.
+    ?/??/?! marks with "X was best" comments and the best line as a variation. The clocks
+    are kept for the time-use metrics (game_stats.py); cards are built without them.
     """
     return _get(
-        f"https://lichess.org/game/export/{game_id}?evals=true&literate=true&clocks=false&opening=true",
+        f"https://lichess.org/game/export/{game_id}?evals=true&literate=true&clocks=true&opening=true",
         token,
         accept="application/x-chess-pgn",
     )

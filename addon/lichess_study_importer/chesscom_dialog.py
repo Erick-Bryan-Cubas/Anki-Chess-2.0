@@ -25,6 +25,7 @@ from aqt.qt import (
     QLineEdit,
     QMenu,
     QPushButton,
+    QSpinBox,
     Qt,
     QTableWidget,
     QTableWidgetItem,
@@ -32,16 +33,16 @@ from aqt.qt import (
     QVBoxLayout,
     QWidget,
 )
-from aqt.utils import askUser, showWarning, tooltip
+from aqt.utils import askUser, showInfo, showWarning, tooltip
 
-from . import anki_ops, chesscom, decks, engine, lichess_api, recent_games
+from . import anki_ops, chesscom, decks, engine, lichess_api, performance_store, recent_games
 from .chess_lib import chess
 from .game_analysis import (
     ALL_KINDS,
     DEFAULT_KINDS,
     ENGINE_KINDS,
     AnalysisOptions,
-    analyze_game,
+    analyze_game_with_stats,
     has_server_analysis,
 )
 from .i18n import tr
@@ -88,9 +89,17 @@ class RecentGamesDialog(QDialog):
         self.chesscom_edit.setPlaceholderText(tr("recent.chesscom_user"))
         self.lichess_edit = QLineEdit(config.get("lichess_user", ""))
         self.lichess_edit.setPlaceholderText(tr("recent.lichess_user"))
+        self.count_spin = QSpinBox()
+        self.count_spin.setRange(10, 300)
+        self.count_spin.setSingleStep(10)
+        self.count_spin.setValue(int(config.get("recent_count", 30)))
+        self.count_spin.setToolTip(tr("recent.count_tip"))
         search = QPushButton(tr("recent.search"))
         search.clicked.connect(self.on_search)
-        for widget in (QLabel("Chess.com:"), self.chesscom_edit, QLabel("Lichess:"), self.lichess_edit, search):
+        for widget in (
+            QLabel("Chess.com:"), self.chesscom_edit, QLabel("Lichess:"), self.lichess_edit,
+            QLabel(tr("recent.count")), self.count_spin, search,
+        ):
             users.addWidget(widget)
         layout.addLayout(users)
 
@@ -109,7 +118,7 @@ class RecentGamesDialog(QDialog):
         self.table = QTableWidget(0, len(RECENT_COLUMNS))
         self.table.setHorizontalHeaderLabels([tr(k) for k in RECENT_COLUMNS])
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.cellDoubleClicked.connect(lambda *_: self.accept())
@@ -120,6 +129,9 @@ class RecentGamesDialog(QDialog):
         )
         buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("recent.load"))
         buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(tr("button.cancel"))
+        metrics = buttons.addButton(tr("perf.batch.button"), QDialogButtonBox.ButtonRole.ActionRole)
+        metrics.setToolTip(tr("perf.batch.tip"))
+        metrics.clicked.connect(self.on_metrics)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -132,19 +144,20 @@ class RecentGamesDialog(QDialog):
         if not chesscom_user and not lichess_user:
             return
         token = lichess_token()
+        count = self.count_spin.value()
         self.status.setText(tr("recent.loading"))
 
         def fetch(col):
             lists, errors = [], []
             if chesscom_user:
                 try:
-                    games = chesscom.fetch_recent_games(chesscom_user)
+                    games = chesscom.fetch_recent_games(chesscom_user, count, months=max(3, count // 15))
                     lists.append([g for g in (recent_games.from_chesscom(d, chesscom_user) for d in games) if g])
                 except chesscom.ChessComError as e:
                     errors.append(f"Chess.com: {error_text(e)}")
             if lichess_user:
                 try:
-                    games = lichess_api.fetch_user_games(lichess_user, token=token)
+                    games = lichess_api.fetch_user_games(lichess_user, count, token=token)
                     lists.append([recent_games.from_lichess(d, lichess_user) for d in games])
                 except lichess_api.LichessError as e:
                     errors.append(f"Lichess: {error_text(e)}")
@@ -152,7 +165,9 @@ class RecentGamesDialog(QDialog):
 
         def on_done(result):
             self.games, errors = result
-            self.config.update({"chesscom_user": chesscom_user, "lichess_user": lichess_user})
+            self.config.update(
+                {"chesscom_user": chesscom_user, "lichess_user": lichess_user, "recent_count": count}
+            )
             self.status.setText("\n".join(errors) or tr("recent.found", count=len(self.games)))
             self.fill()
 
@@ -188,12 +203,90 @@ class RecentGamesDialog(QDialog):
         rows = self.table.selectionModel().selectedRows()
         return self.games[rows[0].row()] if rows else None
 
+    def on_metrics(self):
+        """Save the metrics of the selected games (all the listed ones when none is selected)."""
+        rows = sorted(i.row() for i in self.table.selectionModel().selectedRows())
+        if not rows:
+            rows = [i for i in range(len(self.games)) if not self.table.isRowHidden(i)]
+        write_config(self.config)
+        record_metrics(self, [self.games[i] for i in rows], self.config)
+
+
+def my_usernames(config: dict) -> set[str]:
+    """Your Chess.com and Lichess usernames, lowercased."""
+    mine = {u.lower() for u in config.get("chesscom_usernames", [])}
+    mine |= {config.get(k, "").lower() for k in ("chesscom_user", "lichess_user")}
+    return mine - {"", "?"}
+
+
+def has_evals(game: chess.pgn.Game) -> bool:
+    return any(node.eval() is not None for node in game.mainline())
+
+
+def record_metrics(parent, games: list[recent_games.RecentGame], config: dict) -> None:
+    """
+    Analyse games only for their metrics (no cards) and save them in the collection.
+    Games analysed on Lichess use their evals; the others need Stockfish. Without it
+    they are saved with what the PGN gives (theory, clock, Game Review labels).
+    """
+    games = [g for g in games if g.user_color is not None and g.pgn]
+    if not games:
+        tooltip(tr("perf.batch.none"), parent=parent)
+        return
+    path = engine.find_stockfish(config.get("stockfish_path", ""))
+    move_time = float(config.get("analysis_time", 0.5))
+
+    def progress(done, total):
+        mw.taskman.run_on_main(
+            lambda: mw.progress.update(
+                label=tr("perf.batch.progress", game=done + 1, total=total), value=done, max=total
+            )
+        )
+
+    def task(col):
+        results, failed, without_evals = [], 0, 0
+        sf = None
+        try:
+            for done, item in enumerate(games):
+                progress(done, len(games))
+                try:
+                    game = chesscom.read_game(item.pgn)
+                except chesscom.ChessComError:
+                    failed += 1
+                    continue
+                use_engine = None
+                if not has_evals(game):
+                    if path and sf is None:
+                        sf = engine.open_engine(path)
+                    use_engine = sf
+                    without_evals += sf is None
+                options = AnalysisOptions(user_color=item.user_color, kinds=set(), move_time=move_time)
+                _, stats = analyze_game_with_stats(game, options, use_engine, official=item.official)
+                results.append(stats)
+        finally:
+            if sf is not None:
+                sf.quit()
+        return results, failed, without_evals
+
+    def on_done(result):
+        stats_list, failed, without_evals = result
+        changed = sum(performance_store.save_game(mw.col, stats) for stats in stats_list)
+        text = tr("perf.batch.done", count=len(stats_list), changed=changed, failed=failed)
+        if without_evals:
+            text += "\n\n" + tr("perf.batch.no_engine", count=without_evals)
+        showInfo(text, parent=parent)
+
+    QueryOp(parent=parent, op=task, success=on_done).failure(
+        lambda e: showWarning(error_text(e), parent=parent)
+    ).with_progress(tr("perf.batch.progress", game=1, total=len(games))).without_collection().run_in_background()
+
 
 class GameImportPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.config = get_config()
         self.game: chess.pgn.Game | None = None
+        self.official: dict | None = None  # Lichess' accuracy of your side, from "My games"
         self.cards = []
         self.statuses: list[str] = []
         self.last_nids: list[int] = []
@@ -373,6 +466,7 @@ class GameImportPage(QWidget):
             write_config(self.config)  # the usernames
             self.url_edit.setText(game.url)
             self.load_pgn(game.pgn, game.user_color)
+            self.official = game.official
 
     def on_open_file(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -421,6 +515,7 @@ class GameImportPage(QWidget):
         except chesscom.ChessComError as e:
             showWarning(error_text(e), parent=self)
             return
+        self.official = None
         h = self.game.headers
         count = sum(chesscom.move_label(n) in chesscom.ERROR_LABELS for n in self.game.mainline())
         server_analysis = has_server_analysis(self.game)
@@ -447,8 +542,7 @@ class GameImportPage(QWidget):
         self.side_combo.clear()
         self.side_combo.addItem(tr("cc.side_white", name=h.get("White", "?")), chess.WHITE)
         self.side_combo.addItem(tr("cc.side_black", name=h.get("Black", "?")), chess.BLACK)
-        mine = {u.lower() for u in self.config.get("chesscom_usernames", [])}
-        mine |= {self.config.get(k, "").lower() for k in ("chesscom_user", "lichess_user")} - {""}
+        mine = my_usernames(self.config)
         if user_color == chess.BLACK or (
             user_color is None and h.get("Black", "").lower() in mine and h.get("White", "").lower() not in mine
         ):
@@ -483,6 +577,7 @@ class GameImportPage(QWidget):
             solution_time=max(1.0, self.time_spin.value() * 3),
         )
         game = self.game
+        official = self.official
 
         def progress(done, total):
             mw.taskman.run_on_main(
@@ -493,13 +588,23 @@ class GameImportPage(QWidget):
 
         def task(col):
             if not needs_engine:
-                return analyze_game(game, options)
+                return analyze_game_with_stats(game, options, official=official)
             with engine.open_engine(path) as sf:
-                return analyze_game(game, options, sf, progress)
+                return analyze_game_with_stats(game, options, sf, progress, official)
 
-        QueryOp(parent=self, op=task, success=self.show_cards).failure(
+        QueryOp(parent=self, op=task, success=self.on_analysed).failure(
             lambda e: showWarning(error_text(e), parent=self)
         ).with_progress(tr("cc.analyzing", done=0, total="?")).without_collection().run_in_background()
+
+    def on_analysed(self, result):
+        cards, stats = result
+        # The game's metrics for the performance panel, synced with the collection; only
+        # when the side analysed is one of your accounts (not a master game being studied)
+        side = self.side_combo.currentData()
+        player = self.game.headers.get("White" if side == chess.WHITE else "Black", "")
+        if player.lower() in my_usernames(self.config):
+            performance_store.save_game(mw.col, stats)
+        self.show_cards(cards)
 
     def show_cards(self, cards):
         self.cards = sorted(cards, key=lambda c: (c.ply, c.kind))
