@@ -9,7 +9,7 @@ import os
 from aqt import gui_hooks, mw
 from aqt.qt import QAction
 
-from . import analysis_note, template_preview
+from . import analysis_note, puzzle_sync, template_preview
 from .anki_ops import apply_template_preview, fix_pgn_line_breaks, show_pgn_line_breaks
 from .i18n import tr
 from .import_window import show_import_window
@@ -37,6 +37,8 @@ def setup_menu():
 
 # Runs after all add-ons are loaded, so the Companion menu already exists
 gui_hooks.main_window_did_init.append(setup_menu)
+# The puzzle sync button at the end of the menu bar, like Anki Restart's
+gui_hooks.main_window_did_init.append(puzzle_sync.setup_button)
 
 def apply_preview(config: dict | None = None):
     # The template preview shipped in the add-on, or back to the official one when turned off
@@ -51,6 +53,8 @@ def apply_preview(config: dict | None = None):
 def on_profile_open():
     fix_pgn_line_breaks(mw.col)
     apply_preview()
+    # The puzzles you played on Lichess since the last sync, a little later and quietly
+    puzzle_sync.schedule_on_open()
 
 
 def preview_in_companion_pages(web_content, context):
@@ -69,8 +73,15 @@ def preview_in_companion_pages(web_content, context):
 gui_hooks.card_will_show.append(show_pgn_line_breaks)
 gui_hooks.profile_did_open.append(on_profile_open)
 gui_hooks.sync_will_start.append(lambda: fix_pgn_line_breaks(mw.col))
-# preview_template changed in Tools > Add-ons > Config
-mw.addonManager.setConfigUpdatedAction(__name__, apply_preview)
+
+
+def on_config_updated(config: dict):
+    apply_preview(config)
+    puzzle_sync.update_button(config)
+
+
+# preview_template or puzzle_sync_button changed in Tools > Add-ons > Config
+mw.addonManager.setConfigUpdatedAction(__name__, on_config_updated)
 
 # "New card from this position" on the back of a card: the Add window with that PGN
 gui_hooks.webview_will_set_content.append(analysis_note.add_flag)
