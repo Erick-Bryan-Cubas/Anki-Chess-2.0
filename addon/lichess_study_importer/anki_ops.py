@@ -25,6 +25,7 @@ from .pgn_field import (
     space_line_breaks,
 )
 from .pgn_split import CHAPTER_URL_RE, ID_TAG, MODE_FLIPPED, MODE_PUZZLE, MODE_STUDY, Chapter
+from .puzzles import KEY_PREFIX, imported_ids
 from .structures import stored_side
 
 # Same markers used by the AnkiChess Companion add-on
@@ -343,9 +344,28 @@ def _same_note(note, fields: list[str], tags: list[str]) -> bool:
     return _same_fields(note, fields) and {t.lower() for t in note.tags} == {t.lower() for t in tags}
 
 
-def card_status(col, card, strip_anno: bool) -> tuple[str, list[int]]:
-    """("new" | "same" | "changed", note ids): how a card compares to its notes."""
-    nids = find_existing(col, card)
+def imported_puzzles(col) -> dict[str, list[int]]:
+    """Lichess puzzle id -> its notes, with one search (by the [AnkiChessId] of their PGN)."""
+    found: dict[str, list[int]] = {}
+    nids = col.find_notes(f'"PGN:*{ID_TAG} \\"{_search_text(KEY_PREFIX)}*"')
+    if nids:
+        for nid, flds in col.db.all(f"select id, flds from notes where id in {ids2str(nids)}"):
+            for puzzle_id in imported_ids(flds):
+                found.setdefault(puzzle_id, []).append(nid)
+    return found
+
+
+def puzzle_tag_strings(col) -> list[str]:
+    """The tags of the Lichess puzzle notes (for puzzle_themes.puzzle_stats), with one query."""
+    return col.db.list("select tags from notes where tags like ?", "%lichess::puzzle%")
+
+
+def card_status(col, card, strip_anno: bool, nids: list[int] | None = None) -> tuple[str, list[int]]:
+    """
+    ("new" | "same" | "changed", note ids): how a card compares to its notes (nids: the
+    ones already found, to skip the search).
+    """
+    nids = find_existing(col, card) if nids is None else nids
     if not nids:
         return "new", []
     fields = note_fields(card, strip_anno)
@@ -373,6 +393,7 @@ def import_chapters(
     stats: dict,
     undo_label: str = "",
     move_cards: bool = True,
+    organize: list[tuple[list[int], str, list[str], str | None]] = (),
 ):
     """
     rows: list of (card, note type dict, decks.Placement), where a card is a
@@ -385,6 +406,12 @@ def import_chapters(
     "update" reorganises older imports into the current deck layout. Notes that are
     already up to date aren't rewritten. Notes imported before in another note type
     keep it, and are listed in stats["other_type"].
+
+    organize: (note ids, deck, tags, text) of notes already imported that only change
+    place (the puzzle sync): their cards move to the deck (not the ones in a filtered
+    deck), the importer's tags are replaced and, when text isn't None, the text field
+    under the board too; the PGN field stays. stats["organized"] counts the items that
+    changed.
     """
     undo_pos = col.add_custom_undo_entry(undo_label or tr("undo.import"))
     deck_ids: dict[str, int] = {}
@@ -436,6 +463,27 @@ def import_chapters(
         note.tags = tags
         to_add.append(AddNoteRequest(note=note, deck_id=deck_id(placement.deck)))
         stats["created"] += 1
+
+    if organize:
+        stats.setdefault("organized", 0)
+    for note_ids, deck, tags, text in organize:
+        did = deck_id(deck)
+        cids = col.db.list(f"select id from cards where nid in {ids2str(note_ids)} and did != ? and odid = 0", did)
+        changed = False
+        for nid in note_ids:
+            note = col.get_note(nid)
+            new_tags = merged_tags(note.tags, tags)
+            new_text = text is not None and len(note.fields) > 1 and note.fields[1] != text
+            if new_text or {t.lower() for t in new_tags} != {t.lower() for t in note.tags}:
+                note.tags = new_tags
+                if new_text:
+                    note.fields[1] = text
+                to_update.append(note)
+                changed = True
+        if cids:
+            moves.setdefault(did, []).extend(cids)
+        if changed or cids:
+            stats["organized"] += 1
 
     # Batched, so the import is a few undo steps: one per note would push the
     # custom entry out of Anki's undo queue on large imports
