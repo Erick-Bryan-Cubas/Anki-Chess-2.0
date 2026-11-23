@@ -46,8 +46,8 @@ export function getMenuData(
         },
         {
           type: 'number',
-          label: 'Multi Pv',
-          tooltip: 'Default Pv for analysis',
+          label: 'Engine Lines',
+          tooltip: 'How many lines Stockfish shows when analysing',
           min: 1,
           max: 5,
           value: userConfig.opts.analysisLines,
@@ -69,14 +69,14 @@ export function getMenuData(
         },
         {
           type: 'toggle',
-          label: 'showDests',
+          label: 'Show Legal Moves',
           tooltip: 'Show legal moves for selected piece',
           checked: userConfig.opts.showDests,
           onToggle: () => setConfigBoolean('showDests'),
         },
         {
           type: 'number',
-          label: 'Animation time (ms)',
+          label: 'Animation Time (ms)',
           tooltip: 'Set time for piece movement animations',
           min: 100,
           max: 1000,
@@ -86,7 +86,7 @@ export function getMenuData(
         },
         {
           type: 'number',
-          label: 'Board size (px)',
+          label: 'Board Size (px)',
           tooltip:
             'Maximum board size. The board always stays square and never grows past the screen, so phones in portrait are not affected',
           min: 400,
@@ -141,6 +141,22 @@ export function getMenuData(
           onToggle: () => setConfigBoolean('refutation'),
         },
         {
+          type: 'toggle',
+          label: 'Show Eval on Front',
+          tooltip:
+            "While solving, the board's border is Stockfish's eval bar, as on the back. It shows no arrows or lines, so it doesn't give the move away. Stockfish runs on each position, which takes some battery on a phone. Not with Random Orientation, which hides the side.",
+          checked: userConfig.opts.frontEval,
+          onToggle: () => setConfigBoolean('frontEval'),
+        },
+        {
+          type: 'toggle',
+          label: 'Stockfish Button on Front',
+          tooltip:
+            "While solving, a Stockfish button next to the hint turns the eval bar (Show Eval on Front) on or off, without opening this menu.",
+          checked: userConfig.opts.frontEvalButton,
+          onToggle: () => setConfigBoolean('frontEvalButton'),
+        },
+        {
           type: 'separator',
         },
         {
@@ -182,6 +198,15 @@ export function getMenuData(
           onChange: (val: number) => (userConfig.opts.increment = val * 1000),
           indent: true,
         },
+        userConfig.opts.timer && {
+          type: 'toggle',
+          label: 'Digital Clock',
+          tooltip:
+            "Shows the time left as minutes and seconds with a chess clock, in the bottom player bar (or next to the card's tools without the bars), instead of on the board's border.",
+          checked: userConfig.opts.timerClock,
+          onToggle: () => setConfigBoolean('timerClock'),
+          indent: true,
+        },
       ],
     },
     {
@@ -201,7 +226,7 @@ export function getMenuData(
         },
         {
           type: 'number',
-          label: 'AI ELO',
+          label: 'AI Elo',
           tooltip: 'Default UCI_Elo target for stockfish AI. (Min 1320, max 3190)',
           min: 1320,
           max: 3190,
@@ -253,8 +278,9 @@ export function getMenuData(
         },
         {
           type: 'toggle',
-          label: 'Flip PGN',
-          tooltip: 'Dictates where puzzle is solves from first or second move of the PGN',
+          label: 'Opponent Moves First',
+          tooltip:
+            "Plays the PGN's first move for the opponent, and you solve from the second (as in Lichess puzzles). Off, you solve from the first move.",
           checked: userConfig.opts.flipBoard,
           onToggle: () => setConfigBoolean('flipBoard'),
         },
@@ -324,7 +350,7 @@ export function getMenuData(
         },
         {
           type: 'select',
-          label: 'Board',
+          label: 'Board Theme',
           value: userConfig.opts.boardTheme,
           onChange: (val: string) => (userConfig.opts.boardTheme = val),
           // Convert the Record into an array of option objects
@@ -337,7 +363,7 @@ export function getMenuData(
         },
         {
           type: 'select',
-          label: 'Pieces',
+          label: 'Piece Theme',
           value: userConfig.opts.pieceTheme,
           onChange: (val: string) => (userConfig.opts.pieceTheme = val),
           options: Object.keys(pieceSprites).map((theme) => ({

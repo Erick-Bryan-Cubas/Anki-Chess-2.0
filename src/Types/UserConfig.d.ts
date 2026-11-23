@@ -14,10 +14,13 @@ export interface UserConfigOpts {
   strictScoring: boolean;
   hints: boolean;
   refutation: boolean;
+  frontEval: boolean;
+  frontEvalButton: boolean;
   acceptVariations: boolean;
   playBothSides: boolean;
   timer: number;
   increment: number;
+  timerClock: boolean;
   randomOrientation: boolean;
   analysisTime: number;
   analysisLines: number;

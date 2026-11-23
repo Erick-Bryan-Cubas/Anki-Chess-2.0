@@ -10,6 +10,7 @@
   import { getContext } from 'svelte';
   import { materialDiff } from '$features/chessJs/material';
   import { playerInfo } from '$features/pgn/players';
+  import PuzzleClock from '$components/PuzzleClock.svelte';
 
   // The side of the board this bar is on: it shows the player of the colour there
   let { position }: { position: 'top' | 'bottom' } = $props();
@@ -72,6 +73,10 @@
       <span class="score">+{material.score}</span>
     {/if}
   </span>
+
+  {#if position === 'bottom'}
+    <PuzzleClock />
+  {/if}
 </div>
 
 <style lang="scss">
@@ -86,7 +91,6 @@
     box-sizing: border-box;
     overflow: hidden;
     white-space: nowrap;
-    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
     font-size: clamp(11px, calc($player-bar * 0.5), 14px);
     line-height: 1;
     background: var(--surface-secondary);
@@ -120,6 +124,7 @@
   .name {
     min-width: 0;
     overflow: hidden;
+    line-height: 1.3; /* Room for the descenders: overflow clips them at the bar's line height */
     text-overflow: ellipsis;
     font-weight: 600;
     color: var(--text-primary);

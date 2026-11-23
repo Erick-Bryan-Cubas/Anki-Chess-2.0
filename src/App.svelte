@@ -11,8 +11,11 @@
   import ErrorPopup from '$components/ErrorPopup.svelte';
   import SettingsMenu from '$components/SettingsMenu.svelte';
   import HintButton from '$components/HintButton.svelte';
+  import EvalButton from '$components/EvalButton.svelte';
+  import PuzzleClock from '$components/PuzzleClock.svelte';
   import TemplateConfig from '$components/TemplateConfig.svelte';
   import BoardLayout from '$components/BoardLayout.svelte';
+  import NoteText from '$components/NoteText.svelte';
   import { BOARD_THEMES } from '$utils/themeData';
   import { hasPgnComments } from '$features/pgn/pgnParsing';
 
@@ -109,16 +112,18 @@
   >
     {#snippet comments()}
       {#if userText}
-        <div id="userTextContainer">
-          <div id="textField">{@html userText}</div>
-        </div>
+        <NoteText text={userText} joined={boardMode !== 'Viewer'} />
       {/if}
       {#if boardMode !== 'Viewer'}
         <!-- The front has no move buttons (they'd give the solution away): the hint and the menu -->
         <div id="sticky-container">
           <div id="buttons-container" class="menu-only">
-            <HintButton />
-            <SettingsMenu bind:isHelpOpen inToolbar />
+            {#if !userConfig.opts.playerBars}
+              <PuzzleClock standalone />
+            {/if}
+            <EvalButton labelled />
+            <HintButton labelled />
+            <SettingsMenu bind:isHelpOpen inToolbar labelled />
           </div>
         </div>
       {/if}
@@ -154,6 +159,10 @@
       {#if !showComments}
         <!-- No comment box for the hint and the menu: they float beside the board, never over a square -->
         <div id="floating-tools">
+          {#if !userConfig.opts.playerBars}
+            <PuzzleClock standalone />
+          {/if}
+          <EvalButton />
           <HintButton />
           <SettingsMenu bind:isHelpOpen />
         </div>
@@ -163,18 +172,6 @@
 </GameProvider>
 
 <style lang="scss">
-  #userTextContainer {
-    @include flex-center;
-    width: 100%;
-    background: var(--surface-secondary);
-    color: var(--text-primary);
-    border-bottom: var(--border-thin);
-
-    #textField {
-      padding: 0.5em;
-    }
-  }
-
   #sticky-container {
     position: sticky;
     top: 0; /* Sticks to the top of the container when you scroll */
@@ -185,9 +182,11 @@
       background: var(--surface-secondary);
       padding: 4px;
 
-      // The front's few tools go to the end, as menus do in toolbars
+      // The front's few tools go to the end, as menus do in toolbars, under the note's text
       &.menu-only {
         justify-content: flex-end;
+        gap: 6px;
+        padding: 4px 10px 8px;
       }
     }
   }
@@ -200,11 +199,13 @@
   #floating-tools {
     display: flex;
     align-items: center;
+    gap: 4px;
     position: absolute;
     grid-area: one;
     right: 0;
     bottom: 0;
     margin: 8px;
+    max-width: calc(100% - 16px);
     z-index: 50; /* Under the popups */
 
     @media (orientation: portrait) {

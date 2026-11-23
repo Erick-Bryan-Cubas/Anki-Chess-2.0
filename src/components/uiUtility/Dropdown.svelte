@@ -41,7 +41,10 @@
     items: MenuItem[];
     // Where the menu opens from the trigger: below or above it, aligned to its left or right edge
     position?: 'bottom-left' | 'bottom-right' | 'top-left' | 'top-right';
-    variant?: 'standard' | 'ghost';
+    // pill: rounded, with the label beside the icon (the front's row under the note's text)
+    variant?: 'standard' | 'ghost' | 'pill';
+    // What the button does, for an icon without a label
+    ariaLabel?: string;
   };
 
   let {
@@ -50,6 +53,7 @@
     items,
     position = 'bottom-left',
     variant = 'standard',
+    ariaLabel,
   }: Props = $props();
 
   let isOpen = $state(false);
@@ -225,9 +229,12 @@
   <button
     class="trigger"
     class:ghost={variant === 'ghost'}
+    class:pill={variant === 'pill'}
     class:isActive={isOpen}
     class:has-label={!!label}
     onclick={toggle}
+    aria-label={ariaLabel}
+    title={ariaLabel}
     aria-expanded={isOpen}
     bind:this={triggerRef}
   >
@@ -419,18 +426,25 @@
       gap: 0.4rem; /* Spacing if it has both icon AND label */
     }
 
-    &:hover:not(:disabled, :active, .isActive) {
-      background-color: var(--interactive-button-hover, #f0f0f0);
-      color: var(--surface-primary);
-      @include subtle-shadow(0.7);
+    &:focus-visible {
+      @include focus-ring;
+    }
+    @include can-hover {
+      &:hover:not(:disabled, :active, .isActive) {
+        background-color: var(--interactive-button-hover, #f0f0f0);
+        color: var(--surface-primary);
+        @include subtle-shadow(0.7);
+      }
     }
     &.isActive,
     &:active {
       background-color: var(--interactive-button-active, #e0e0e0);
       color: var(--surface-primary);
       @include subtle-shadow(0.7, inset);
-      &:hover:not(:active) {
-        @include subtle-shadow(0.7);
+      @include can-hover {
+        &:hover:not(:active) {
+          @include subtle-shadow(0.7);
+        }
       }
     }
     &:disabled {
@@ -449,6 +463,27 @@
       white-space: nowrap;
     }
 
+    &.pill {
+      @include pill-btn('.trigger-label');
+
+      .trigger-icon {
+        font-size: 1rem;
+      }
+
+      @include can-hover {
+        &:hover:not(:disabled, :active, .isActive) {
+          background-color: var(--chip-bg);
+          color: var(--text-primary);
+          box-shadow: none;
+        }
+      }
+
+      &.isActive,
+      &:active {
+        border-color: transparent;
+      }
+    }
+
     &.ghost {
       color: #333;
       background-color: transparent;
@@ -463,10 +498,12 @@
         width: auto;
       }
 
-      &:hover:not(:disabled) {
-        opacity: 1;
-        background-color: transparent;
-        box-shadow: none;
+      @include can-hover {
+        &:hover:not(:disabled) {
+          opacity: 1;
+          background-color: transparent;
+          box-shadow: none;
+        }
       }
 
       &.isActive, &:active {
@@ -490,6 +527,7 @@
   }
 
   .menu {
+    font-family: var(--font-ui); /* It lives on the body, outside the card */
     box-sizing: border-box;
     position: fixed;
     z-index: 9999;
@@ -557,9 +595,15 @@
     padding: 0.4rem 0.6rem;
     font-size: 0.85rem;
     cursor: pointer;
-    &:hover:not(.disabled) {
-      color: var(--surface-primary, #fff);
-      background-color: var(--surface-interactive-hover, #f5f5f5);
+    @include can-hover {
+      &:hover:not(.disabled) {
+        color: var(--surface-primary, #fff);
+        background-color: var(--surface-interactive-hover, #f5f5f5);
+      }
+    }
+    &:focus-visible {
+      @include focus-ring;
+      outline-offset: -2px;
     }
     .info-hint {
       opacity: 1;

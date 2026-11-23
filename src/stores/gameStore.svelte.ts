@@ -164,6 +164,26 @@ export class GameStore {
       this.hintLevel = 0;
     });
 
+    // Stockfish for the eval bar on the front: on with it, off when the puzzle is done
+    let frontEvalOn = false;
+    $effect(() => {
+      const on = this.showFrontEval;
+      if (on === frontEvalOn) return;
+      frontEvalOn = on;
+      untrack(() => {
+        if (on !== this.engineStore.enabled) this.engineStore.toggle(this.fen);
+      });
+    });
+    // On each new position (the back does this from its button row, which the front doesn't have).
+    // During a refutation the bar keeps the eval of the wrong move.
+    $effect(() => {
+      const engine = this.engineStore;
+      if (!this.showFrontEval || !engine.enabled || engine.loading) return;
+      if (this.isRefuting || engine.isSearchingMove) return;
+      const fen = this.fen;
+      untrack(() => engine.analyze(fen));
+    });
+
     // Set cg config
     $effect(() => {
       if (!this.cg) return;
@@ -367,6 +387,17 @@ export class GameStore {
   }
 
   // The PGN move a hint points to: the player's next move in an unsolved puzzle
+  // The border as Stockfish's eval bar while solving. A random orientation hides the side, and
+  // its border colours would mean nothing here
+  get showFrontEval(): boolean {
+    return (
+      /^(Puzzle|Study)$/.test(this.boardMode) &&
+      this.config.frontEval &&
+      !this.config.randomOrientation &&
+      !this.isPuzzleComplete
+    );
+  }
+
   get hintMove(): CustomPgnMove | null {
     if (!/^(Puzzle|Study)$/.test(this.boardMode) || this.isPuzzleComplete) return null;
     const next = this.getMoveByPath(navigateNextMove(this.pgnPath));
@@ -400,8 +431,11 @@ export class GameStore {
     // Chess.com marks of the move whose shapes are drawn; its square is tinted while it is the last move
     const effectsMove = this.#moveMap.get(pgnPath.join(','));
     return [
-      // Only spread engine shapes if the engine's eval matches our visual FEN
-      ...(engineStore.enabled && engineStore.evalFen === this.fen ? engineStore.shapes : []),
+      // Only spread engine shapes if the engine's eval matches our visual FEN.
+      // Never while solving: they would show the move
+      ...(!puzzleMode && engineStore.enabled && engineStore.evalFen === this.fen
+        ? engineStore.shapes
+        : []),
       ...getSystemShapes(pgnPath, this.#moveMap, this.boardMode),
       ...effectShapes(moveEffects(effectsMove), effectsMove === this.currentMove),
       ...parseCal(puzzleMode ? [] : this.currentMove?.commentDiag?.colorArrows),
