@@ -311,9 +311,53 @@ STRINGS: dict[str, dict[str, str]] = {
         "puzzle.load_activity": "Load my puzzles",
         "puzzle.links_placeholder": "Puzzle links or ids: https://lichess.org/training/XXXXX …",
         "puzzle.invalid_links": "Enter puzzle links (lichess.org/training/…) or puzzle ids.",
-        "puzzle.none": "No puzzles loaded.",
         "puzzle.loading": "Loading puzzle {done} of {total}…",
         "puzzle.summary": "{count} puzzles, {failed} failed.",
+        "puzzle.solved_hidden": "{count} solved hidden.",
+        "puzzle.overview_title": "Your Lichess puzzles in Anki",
+        "puzzle.chip_total": "<b>{count}</b> puzzles",
+        "puzzle.chip_failed": "<b>{count}</b> failed",
+        "puzzle.chip_solved": "<b>{count}</b> solved",
+        "puzzle.chip_failed_tip": "The puzzles you failed on Lichess: the ones the sync imports by default.",
+        "puzzle.chip_solved_tip": "The puzzles you solved on Lichess. More › Remove solved puzzles deletes them from Anki.",
+        "puzzle.account": "Lichess account: {user}",
+        "puzzle.no_account": "No Lichess token: add one above to sync",
+        "puzzle.more": "More",
+        "puzzle.menu_change_token": "Change Lichess token…",
+        "puzzle.menu_add_token": "Add Lichess token…",
+        "puzzle.menu_remove_token": "Remove Lichess token…",
+        "puzzle.remove_token_ask": "Remove the saved Lichess token?\n\nThe puzzle sync stops until you add one again.",
+        "puzzle.section_settings": "Sync and cards",
+        "puzzle.automatically": "Automatically:",
+        "puzzle.deck_hint": "Each puzzle goes into the subdeck of its main theme (Tactics › Fork, Mates › Mate in 2, Endgames › Rook endgame, or Other); every theme stays a tag.",
+        "puzzle.or_links": "or links:",
+        "puzzle.empty_title": "Choose puzzles to import",
+        "puzzle.empty_hint": "Load your puzzles from Lichess or paste puzzle links above: the ones you failed are listed and checked, ready to import.\nThe sync already imports your new failed puzzles on its own.",
+        "puzzle.check_failed": "Failed",
+        "puzzle.table.deck": "Deck",
+        "puzzle.table.deck_tip": "The subdeck of the puzzle's main theme, inside the deck above.",
+        "puzzle.import_tip": "Imports the checked puzzles (Ctrl+Enter). Space checks or unchecks the selected rows; Ctrl+F filters.",
+        "puzzle.plan_none": "Check the puzzles to import.",
+        "puzzle.today_at": "today at {time}",
+        "puzzle.yesterday_at": "yesterday at {time}",
+        "puzzle.show_solved": "Include solved",
+        "puzzle.remove_solved": "Remove solved puzzles from Anki…",
+        "puzzle.remove_solved_tip": (
+            "Deletes from Anki the Lichess puzzles you solved (tag lichess::puzzle::result::solved), "
+            "with their cards and reviews: for solved puzzles imported by mistake. Asks first, and "
+            "Edit › Undo brings them back. The sync leaves them out afterwards, unless it imports "
+            "the solved ones too."
+        ),
+        "puzzle.remove_solved_ask": (
+            "Remove the {count} Lichess puzzles you solved from Anki?\n\n"
+            "Their cards and reviews are deleted. Edit › Undo brings them back."
+        ),
+        "puzzle.remove_solved_none": "No solved Lichess puzzles in Anki.",
+        "puzzle.remove_solved_done": "{count} solved puzzles removed (Edit › Undo brings them back).",
+        "puzzle.show_solved_tip": (
+            "Lists the puzzles you solved too. Without it, only the ones you failed (and puzzle "
+            "links) are listed, as the sync imports by default."
+        ),
         "puzzle.no_cards": "No puzzles to import.",
         "puzzle.table.puzzle": "Puzzle",
         "puzzle.table.rating": "Rating",
@@ -366,10 +410,7 @@ STRINGS: dict[str, dict[str, str]] = {
             "While Anki is open, looks for new puzzles every hour, in the background (not while "
             "you review: once you leave the reviewer). Starts after the first sync."
         ),
-        "puzzle.section_sync": "Sync with Lichess",
-        "puzzle.section_cards": "Cards",
         "puzzle.section_history": "Pick from your history",
-        "puzzle.in_anki": "In Anki: {count} puzzles, {failed} failed",
         "puzzle.reload_tip": "Read your whole history from Lichess again (results changed on Lichess come with it).",
         "puzzle.reload_ask": (
             "Forget the puzzle activity kept in Anki and read your whole history from Lichess again? "
@@ -403,8 +444,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "panel.source": "Source",
         "panel.date": "{month} {day}, {year}",
         "panel.months": "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec",
-        "puzzle.sync_all": "All new puzzles",
-        "puzzle.sync_mode_tip": "Which of the puzzles you played the sync imports: all of them, or only the ones you failed.",
+        "puzzle.sync_all": "Failed and solved",
+        "puzzle.sync_mode_tip": "Which of the puzzles you played the sync imports: only the ones you failed (the default), or the ones you solved too.",
         "puzzle.sync_on_open": "When Anki opens",
         "puzzle.sync_on_open_tip": (
             "When your profile opens, looks for the puzzles you played since the last sync and "
@@ -416,8 +457,8 @@ STRINGS: dict[str, dict[str, str]] = {
             "Imports the puzzles you played on Lichess that aren't in Anki yet: your whole history "
             "the first time (it can take a while: Esc stops, the rest is imported at the next "
             "sync), then only the new ones. Uses the deck and \"Start with the opponent's move\" "
-            "below. The puzzles already imported that it reads move to Failed/Solved with the "
-            "current tags; their content and reviews stay."
+            "below. The puzzles already imported that it reads move to their main theme's deck "
+            "with the current tags; their content and reviews stay."
         ),
         "puzzle.sync_never": "Never synced: the first sync imports your whole history.",
         "puzzle.sync_last": "Last sync: {date}",
@@ -437,14 +478,18 @@ STRINGS: dict[str, dict[str, str]] = {
             "A button at the end of Anki's menu bar (after Help): one click syncs your Lichess puzzles."
         ),
         "deck.puzzles": "Lichess puzzles",
-        "deck.puzzles_failed": "Failed",
-        "deck.puzzles_solved": "Solved",
+        "deck.puzzle_group.tactics": "Tactics",
+        "deck.puzzle_group.mates": "Mates",
+        "deck.puzzle_group.endgames": "Endgames",
+        "deck.puzzle_group.other": "Other",
         "puzzle.deck_tip": (
-            "The puzzles go into its Failed and Solved subdecks, by your result on Lichess (puzzle "
-            "links: into this deck). Every theme is a tag (lichess::puzzle::theme::fork…): a "
-            "filtered deck on one of them drills that theme."
+            "A puzzle has several themes: it goes into the subdeck of its main one, the most "
+            "specific (Tactics::Fork, Mates::Back rank mate, Endgames::Rook endgame; Other when "
+            "it has no tactic, mate or endgame), failed and solved together. Every theme is a "
+            "tag (lichess::puzzle::theme::fork…), and your result too "
+            "(lichess::puzzle::result::failed or ::solved): a filtered deck on them drills any theme."
         ),
-        "puzzle.sync_organized": "{count} already imported were moved to Failed/Solved or retagged.",
+        "puzzle.sync_organized": "{count} already imported were moved to their theme's deck or retagged.",
         # --- Interface refinements ---
         "window.title": "AnkiChess: import",
         "window.tab_studies": "Studies",
@@ -859,9 +904,53 @@ STRINGS: dict[str, dict[str, str]] = {
         "puzzle.load_activity": "Carregar meus puzzles",
         "puzzle.links_placeholder": "Links ou ids de puzzles: https://lichess.org/training/XXXXX …",
         "puzzle.invalid_links": "Informe links de puzzles (lichess.org/training/…) ou ids de puzzles.",
-        "puzzle.none": "Nenhum puzzle carregado.",
         "puzzle.loading": "Carregando o puzzle {done} de {total}…",
         "puzzle.summary": "{count} puzzles, {failed} errados.",
+        "puzzle.solved_hidden": "{count} acertados ocultos.",
+        "puzzle.overview_title": "Seus puzzles do Lichess no Anki",
+        "puzzle.chip_total": "<b>{count}</b> puzzles",
+        "puzzle.chip_failed": "<b>{count}</b> errados",
+        "puzzle.chip_solved": "<b>{count}</b> acertados",
+        "puzzle.chip_failed_tip": "Os puzzles que você errou no Lichess: os que a sincronização importa por padrão.",
+        "puzzle.chip_solved_tip": "Os puzzles que você acertou no Lichess. Mais › Remover do Anki os puzzles acertados os apaga.",
+        "puzzle.account": "Conta do Lichess: {user}",
+        "puzzle.no_account": "Sem token do Lichess: adicione um acima para sincronizar",
+        "puzzle.more": "Mais",
+        "puzzle.menu_change_token": "Trocar o token do Lichess…",
+        "puzzle.menu_add_token": "Adicionar token do Lichess…",
+        "puzzle.menu_remove_token": "Remover o token do Lichess…",
+        "puzzle.remove_token_ask": "Remover o token do Lichess salvo?\n\nA sincronização de puzzles para até você adicionar outro.",
+        "puzzle.section_settings": "Sincronização e cartões",
+        "puzzle.automatically": "Automaticamente:",
+        "puzzle.deck_hint": "Cada puzzle vai para o subdeck do seu tema principal (Táticas › Garfo, Mates › Mate em 2, Finais › Final de torres, ou Outros); todos os temas continuam como tags.",
+        "puzzle.or_links": "ou links:",
+        "puzzle.empty_title": "Escolha puzzles para importar",
+        "puzzle.empty_hint": "Carregue os seus puzzles do Lichess ou cole links de puzzles acima: os que você errou aparecem marcados, prontos para importar.\nA sincronização já importa sozinha os novos puzzles que você errar.",
+        "puzzle.check_failed": "Errados",
+        "puzzle.table.deck": "Deck",
+        "puzzle.table.deck_tip": "O subdeck do tema principal do puzzle, dentro do deck acima.",
+        "puzzle.import_tip": "Importa os puzzles marcados (Ctrl+Enter). Espaço marca ou desmarca as linhas selecionadas; Ctrl+F filtra.",
+        "puzzle.plan_none": "Marque os puzzles para importar.",
+        "puzzle.today_at": "hoje às {time}",
+        "puzzle.yesterday_at": "ontem às {time}",
+        "puzzle.show_solved": "Incluir os acertados",
+        "puzzle.remove_solved": "Remover do Anki os puzzles acertados…",
+        "puzzle.remove_solved_tip": (
+            "Apaga do Anki os puzzles do Lichess que você acertou (tag lichess::puzzle::result::solved), "
+            "com os cartões e as revisões: para acertados importados por engano. Pergunta antes, e "
+            "Editar › Desfazer os traz de volta. Depois a sincronização os deixa de fora, a menos "
+            "que importe também os acertados."
+        ),
+        "puzzle.remove_solved_ask": (
+            "Remover do Anki os {count} puzzles do Lichess que você acertou?\n\n"
+            "Os cartões e as revisões deles são apagados. Editar › Desfazer os traz de volta."
+        ),
+        "puzzle.remove_solved_none": "Nenhum puzzle do Lichess acertado no Anki.",
+        "puzzle.remove_solved_done": "{count} puzzles acertados removidos (Editar › Desfazer os traz de volta).",
+        "puzzle.show_solved_tip": (
+            "Mostra também os puzzles que você acertou. Sem isto, a lista mostra só os que você "
+            "errou (e os links de puzzles), como a sincronização importa por padrão."
+        ),
         "puzzle.no_cards": "Nenhum puzzle para importar.",
         "puzzle.table.puzzle": "Puzzle",
         "puzzle.table.rating": "Rating",
@@ -914,10 +1003,7 @@ STRINGS: dict[str, dict[str, str]] = {
             "Com o Anki aberto, procura puzzles novos a cada hora, em segundo plano (não durante a "
             "revisão: quando você sair dela). Começa depois da primeira sincronização."
         ),
-        "puzzle.section_sync": "Sincronização com o Lichess",
-        "puzzle.section_cards": "Cartões",
         "puzzle.section_history": "Escolher no seu histórico",
-        "puzzle.in_anki": "No Anki: {count} puzzles, {failed} errados",
         "puzzle.reload_tip": "Ler todo o seu histórico do Lichess de novo (traz os resultados que mudaram no Lichess).",
         "puzzle.reload_ask": (
             "Esquecer a atividade de puzzles guardada no Anki e ler todo o seu histórico do Lichess "
@@ -951,8 +1037,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "panel.source": "Fonte",
         "panel.date": "{day}/{month}/{year}",
         "panel.months": "01 02 03 04 05 06 07 08 09 10 11 12",
-        "puzzle.sync_all": "Todos os puzzles novos",
-        "puzzle.sync_mode_tip": "Quais dos puzzles que você fez a sincronização importa: todos, ou só os que você errou.",
+        "puzzle.sync_all": "Errados e acertados",
+        "puzzle.sync_mode_tip": "Quais dos puzzles que você fez a sincronização importa: só os que você errou (o padrão), ou também os que acertou.",
         "puzzle.sync_on_open": "Ao abrir o Anki",
         "puzzle.sync_on_open_tip": (
             "Ao abrir o seu perfil, procura os puzzles que você fez desde a última sincronização e "
@@ -964,8 +1050,8 @@ STRINGS: dict[str, dict[str, str]] = {
             "Importa os puzzles que você fez no Lichess e que ainda não estão no Anki: todo o seu "
             "histórico na primeira vez (pode demorar: Esc para, e o resto entra na próxima "
             "sincronização), depois só os novos. Usa o deck e \"Começar pelo lance do adversário\" "
-            "abaixo. Os puzzles já importados que ela lê vão para Errados/Acertados com as tags "
-            "atuais; o conteúdo e as revisões continuam."
+            "abaixo. Os puzzles já importados que ela lê vão para o deck do seu tema principal com "
+            "as tags atuais; o conteúdo e as revisões continuam."
         ),
         "puzzle.sync_never": "Nunca sincronizado: a primeira sincronização importa todo o seu histórico.",
         "puzzle.sync_last": "Última sincronização: {date}",
@@ -986,14 +1072,18 @@ STRINGS: dict[str, dict[str, str]] = {
             "seus puzzles do Lichess."
         ),
         "deck.puzzles": "Puzzles do Lichess",
-        "deck.puzzles_failed": "Errados",
-        "deck.puzzles_solved": "Acertados",
+        "deck.puzzle_group.tactics": "Táticas",
+        "deck.puzzle_group.mates": "Mates",
+        "deck.puzzle_group.endgames": "Finais",
+        "deck.puzzle_group.other": "Outros",
         "puzzle.deck_tip": (
-            "Os puzzles vão para os subdecks Errados e Acertados deste deck, pelo seu resultado no "
-            "Lichess (links de puzzles: para este deck). Cada tema é uma tag "
-            "(lichess::puzzle::theme::fork…): um deck filtrado por uma delas treina aquele tema."
+            "Um puzzle tem vários temas: ele vai para o subdeck do principal, o mais específico "
+            "(Táticas::Garfo, Mates::Mate do corredor, Finais::Final de torres; Outros quando não "
+            "tem tática, mate nem final), errados e acertados juntos. Cada tema é uma tag "
+            "(lichess::puzzle::theme::fork…), e o seu resultado também "
+            "(lichess::puzzle::result::failed ou ::solved): um deck filtrado por elas treina qualquer tema."
         ),
-        "puzzle.sync_organized": "{count} já importados foram movidos para Errados/Acertados ou receberam as tags novas.",
+        "puzzle.sync_organized": "{count} já importados foram movidos para o deck do seu tema ou receberam as tags novas.",
         # --- Interface refinements ---
         "window.title": "AnkiChess: importar",
         "window.tab_studies": "Estudos",

@@ -7,8 +7,8 @@ and messages, the tests with plain calls (see SyncHost).
    then only the puzzles played since. A read that stops imports nothing; the cache
    keeps what it can and the next sync goes on from there.
 2. Plan: the puzzles not in Anki yet (only the failed ones with failed_only), oldest
-   first; and the imported puzzles read, which move to their result's deck with the
-   current tags and text.
+   first; and the imported puzzles read, which move to their main theme's deck with
+   the current tags and text.
 3. Fetch the planned puzzles with their game (or build them from the activity).
 4. Import them and move the others in one undo step, then save where the next sync
    starts (at the first puzzle left when fetching stopped).
@@ -31,7 +31,9 @@ from .puzzles import PuzzleCard, activity_card, load_puzzles, next_sync_point, p
 # whole history once, so every imported puzzle gets it. 1: Failed / Solved subdecks and
 # lichess::puzzle::theme:: tags. 2: theme names and your result in the text under the board.
 # 3: that text as a grid of label and value (result, themes, source) the card styles.
-PUZZLE_LAYOUT = 3
+# 4: one subdeck per main theme (decks.puzzle_placement) instead of Failed / Solved, and
+# the result in lichess::puzzle::result::failed or ::solved.
+PUZZLE_LAYOUT = 4
 
 
 @dataclass
@@ -85,7 +87,7 @@ def activity_cards(entries: list[dict]) -> list[PuzzleCard]:
 def organize_rows(entries: list[dict], imported: dict[str, list[int]], deck: str) -> list[tuple]:
     """
     For import_chapters(organize=...): the imported puzzles among these entries, with
-    their result's deck, the current tags and the text under the board (it doesn't
+    their main theme's deck, the current tags and the text under the board (it doesn't
     depend on the puzzle's game, so the activity gives it).
     """
     rows = []
@@ -98,8 +100,8 @@ def organize_rows(entries: list[dict], imported: dict[str, list[int]], deck: str
             text = activity_card(entry).note_text()  # the text field, without building the PGN
         except (KeyError, TypeError, ValueError, AssertionError):
             text = None
-        tags = puzzle_tags(entry["puzzle"].get("themes", []), win)
-        rows.append((nids, decks.puzzle_placement(deck, win).deck, tags, text))
+        themes = entry["puzzle"].get("themes", [])
+        rows.append((nids, decks.puzzle_placement(deck, themes).deck, puzzle_tags(themes, win), text))
     return rows
 
 
@@ -190,7 +192,7 @@ class SyncFlow:
         except anki_ops.ChessImportError as e:
             self.host.finish(error=e)
             return
-        rows = [(card, models[card.mode], decks.puzzle_placement(deck, card.win)) for card in cards]
+        rows = [(card, models[card.mode], decks.puzzle_placement(deck, card.themes)) for card in cards]
         stats: dict = {}
 
         def op(col):

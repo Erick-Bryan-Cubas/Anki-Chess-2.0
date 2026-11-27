@@ -8,6 +8,7 @@ Pure Python (no aqt imports) so it can be unit tested outside Anki.
 
 from __future__ import annotations
 
+import datetime
 import html
 import re
 import time
@@ -20,7 +21,7 @@ from .game_analysis import export_pgn, mate_alternatives
 from .i18n import tr
 from .lichess_api import LichessError, Wait, fetch_puzzle
 from .pgn_split import ID_TAG, MODE_FLIPPED, MODE_PUZZLE
-from .puzzle_themes import theme_name
+from .puzzle_themes import FAILED_TAG, SOLVED_TAG, theme_name
 
 KIND_PUZZLE = "puzzle"
 KEY_PREFIX = "puzzle/"
@@ -36,11 +37,12 @@ TAG_ROOT = "lichess::puzzle"
 def puzzle_tags(themes: list[str], win: bool | None) -> list[str]:
     """
     The importer's tags of a puzzle note: lichess::puzzle::theme::<theme> for each of its
-    themes, and lichess::puzzle::failed or ::solved for your result (none for a link's).
+    themes, and lichess::puzzle::result::failed or ::solved for your result (none for a
+    link's).
     """
     tags = ["lichess", TAG_ROOT, *(f"{TAG_ROOT}::theme::{tag_part(t)}" for t in themes)]
     if win is not None:
-        tags.append(f"{TAG_ROOT}::{'solved' if win else 'failed'}")
+        tags.append(SOLVED_TAG if win else FAILED_TAG)
     return tags
 
 
@@ -216,6 +218,22 @@ def short_date(ms: int) -> str:
     month = tr("panel.months").split()[t.tm_mon - 1]
     day = f"{t.tm_mday:02d}" if month.isdigit() else str(t.tm_mday)  # an all-number date: 05/09
     return tr("panel.date", month=month, day=day, year=t.tm_year)
+
+
+def when_text(ms: int, now: float | None = None) -> str:
+    """When something happened, for a status line: today at 12:29, yesterday at 08:05, or the date."""
+    then = time.localtime(ms / 1000)
+    today = time.localtime(now)
+    days = (
+        datetime.date(today.tm_year, today.tm_mon, today.tm_mday)
+        - datetime.date(then.tm_year, then.tm_mon, then.tm_mday)
+    ).days
+    clock = time.strftime("%H:%M", then)
+    if days == 0:
+        return tr("puzzle.today_at", time=clock)
+    if days == 1:
+        return tr("puzzle.yesterday_at", time=clock)
+    return f"{short_date(ms)} {clock}"
 
 
 def activity_card(entry: dict) -> PuzzleCard:

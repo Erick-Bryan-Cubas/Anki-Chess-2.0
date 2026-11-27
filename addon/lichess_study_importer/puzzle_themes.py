@@ -13,8 +13,91 @@ from typing import Iterable
 from .i18n import get_language
 
 THEME_TAG = "lichess::puzzle::theme::"
-FAILED_TAG = "lichess::puzzle::failed"
+RESULT_TAG = "lichess::puzzle::result::"
+FAILED_TAG = f"{RESULT_TAG}failed"
+SOLVED_TAG = f"{RESULT_TAG}solved"
+# Before PUZZLE_LAYOUT 4; the next sync replaces them
+LEGACY_FAILED_TAG = "lichess::puzzle::failed"
+LEGACY_SOLVED_TAG = "lichess::puzzle::solved"
 PUZZLE_TAG = "lichess::puzzle"
+
+# A puzzle's deck is the first of these themes it has, in this order, under its group's
+# subdeck: a named mate, then the tactic (the most specific first), a mate in N, an
+# endgame. The others (phase, goal, length, origin) never make a deck: a puzzle with
+# only those goes to the Other subdeck.
+GROUP_TACTICS, GROUP_MATES, GROUP_ENDGAMES, GROUP_OTHER = "tactics", "mates", "endgames", "other"
+THEME_GROUPS: list[tuple[str, list[str]]] = [
+    (
+        GROUP_MATES,
+        [
+            "smotheredMate",
+            "anastasiaMate",
+            "arabianMate",
+            "backRankMate",
+            "balestraMate",
+            "blindSwineMate",
+            "bodenMate",
+            "cornerMate",
+            "doubleBishopMate",
+            "dovetailMate",
+            "epauletteMate",
+            "hookMate",
+            "killBoxMate",
+            "morphysMate",
+            "operaMate",
+            "pillsburysMate",
+            "swallowstailMate",
+            "triangleMate",
+            "vukovicMate",
+        ],
+    ),
+    (
+        GROUP_TACTICS,
+        [
+            "doubleCheck",
+            "discoveredCheck",
+            "discoveredAttack",
+            "skewer",
+            "pin",
+            "fork",
+            "xRayAttack",
+            "interference",
+            "clearance",
+            "deflection",
+            "attraction",
+            "capturingDefender",
+            "intermezzo",
+            "trappedPiece",
+            "zugzwang",
+            "quietMove",
+            "defensiveMove",
+            "underPromotion",
+            "promotion",
+            "enPassant",
+            "castling",
+            "sacrifice",
+            "hangingPiece",
+            "attackingF2F7",
+            "advancedPawn",
+            "exposedKing",
+            "kingsideAttack",
+            "queensideAttack",
+        ],
+    ),
+    (GROUP_MATES, ["mateIn1", "mateIn2", "mateIn3", "mateIn4", "mateIn5", "mate"]),
+    (
+        GROUP_ENDGAMES,
+        [
+            "rookEndgame",
+            "bishopEndgame",
+            "knightEndgame",
+            "pawnEndgame",
+            "queenEndgame",
+            "queenRookEndgame",
+            "endgame",
+        ],
+    ),
+]
 
 # Lichess theme key: (English, Brazilian Portuguese)
 THEMES: dict[str, tuple[str, str]] = {
@@ -115,6 +198,24 @@ def theme_names(keys: Iterable[str]) -> str:
     return ", ".join(theme_name(k) for k in keys)
 
 
+def primary_theme(themes: Iterable[str]) -> tuple[str, str] | None:
+    """
+    (group, theme) of the puzzle's deck: the first of THEME_GROUPS' themes it has;
+    None when it has none of them (its deck is the Other subdeck).
+    """
+    have = set(themes)
+    for group, keys in THEME_GROUPS:
+        for key in keys:
+            if key in have:
+                return group, key
+    return None
+
+
+def solved_search() -> str:
+    """The Anki search of the puzzles you solved (also as tagged before the result:: tags)."""
+    return f"(tag:{SOLVED_TAG} OR tag:{LEGACY_SOLVED_TAG})"
+
+
 def theme_search(key: str, failed_only: bool) -> str:
     """The Anki search of a theme's puzzles (failed_only: only those you failed)."""
     search = f"tag:{THEME_TAG}{key}"
@@ -133,7 +234,7 @@ def puzzle_stats(tag_strings: Iterable[str]) -> tuple[int, int, dict[str, list[i
         lower = {w.lower() for w in words}
         if PUZZLE_TAG not in lower:
             continue
-        is_failed = FAILED_TAG in lower
+        is_failed = FAILED_TAG in lower or LEGACY_FAILED_TAG in lower
         total += 1
         failed += is_failed
         for word in words:

@@ -169,11 +169,13 @@ def test_first_sync_imports_everything_missing_oldest_first(env):
     env.notes["a"] = {"deck": DECK, "tags": [], "text": "old"}  # imported before, into the single deck
     host = env.sync()
     assert env.fetched == ["b", "c", "d", "e"]  # the games of the new ones, oldest first
-    assert env.notes["b"]["deck"] == f"{DECK}::Failed" and env.notes["c"]["deck"] == f"{DECK}::Solved"
-    assert env.notes["a"]["deck"] == f"{DECK}::Solved" and "lichess::puzzle::theme::fork" in env.notes["a"]["tags"]
+    fork = f"{DECK}::Tactics::Fork"  # their main theme, failed and solved together
+    assert env.notes["b"]["deck"] == fork and env.notes["c"]["deck"] == fork
+    assert env.notes["a"]["deck"] == fork and "lichess::puzzle::theme::fork" in env.notes["a"]["tags"]
+    assert "lichess::puzzle::result::solved" in env.notes["a"]["tags"]
     assert 'class="ac-result ac-solved"' in env.notes["a"]["text"]  # the text above the board, from the activity
     assert host.saved == [(50, env.sync_flow.PUZZLE_LAYOUT)]
-    message = "Lichess puzzles: 4 new imported. 1 already imported were moved to Failed/Solved or retagged."
+    message = "Lichess puzzles: 4 new imported. 1 already imported were moved to their theme's deck or retagged."
     assert host.finished == [(message, None, True)]
 
 
@@ -206,7 +208,7 @@ def test_only_the_failed_ones(env):
 def test_without_the_games_the_activity_makes_the_cards(env):
     env.play("a", False, 10)
     env.sync(fetch_games=False)
-    assert env.fetched == [] and env.notes["a"]["deck"] == f"{DECK}::Failed"
+    assert env.fetched == [] and env.notes["a"]["deck"] == f"{DECK}::Tactics::Fork"
 
 
 def test_a_stopped_read_imports_nothing_and_the_next_one_goes_on(env):
@@ -238,4 +240,4 @@ def test_a_new_layout_reads_the_cached_history_without_lichess(env):
     reads = len(env.reads)
     env.sync(since=0)  # a newer layout: the whole history, from the cache
     assert env.reads[reads:] == [(20, None)]  # only the new puzzles were asked for
-    assert env.notes["a"]["deck"] == f"{DECK}::Solved" and env.notes["a"]["tags"]
+    assert env.notes["a"]["deck"] == f"{DECK}::Tactics::Fork" and env.notes["a"]["tags"]

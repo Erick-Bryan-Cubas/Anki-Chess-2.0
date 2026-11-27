@@ -78,7 +78,7 @@ def test_puzzle_card():
     assert moves == [data["puzzle"]["lastMove"], *data["puzzle"]["solution"]]
     assert game.headers["Orientation"] == "black"
     assert game.headers["AnkiChessId"] == "puzzle/tgu12"
-    assert "lichess::puzzle::theme::mateIn3" in card.note_tags and "lichess::puzzle::failed" in card.note_tags
+    assert "lichess::puzzle::theme::mateIn3" in card.note_tags and "lichess::puzzle::result::failed" in card.note_tags
     assert card.chapter_url == "https://lichess.org/training/tgu12"
 
 
@@ -461,7 +461,7 @@ def test_next_sync_point():
     assert puzzles.next_sync_point([], True, [], 0, 42) == 42
 
 
-# --- Failed / Solved decks and theme tags ---
+# --- Theme decks, theme tags and the result tag ---
 
 
 def test_puzzle_tags_by_theme_and_result():
@@ -472,11 +472,11 @@ def test_puzzle_tags_by_theme_and_result():
         "lichess::puzzle::theme::mateIn1",
         "lichess::puzzle::theme::oneMove",
         "lichess::puzzle::theme::middlegame",
-        "lichess::puzzle::failed",
+        "lichess::puzzle::result::failed",
     ]
-    assert puzzles.puzzle_tags(themes, True)[-1] == "lichess::puzzle::solved"
+    assert puzzles.puzzle_tags(themes, True)[-1] == "lichess::puzzle::result::solved"
     link = puzzles.puzzle_tags(themes, None)  # a puzzle link: no result
-    assert not any(t.endswith(("::failed", "::solved")) for t in link)
+    assert not any("::result::" in t for t in link)
     entry = json.loads(activity_line("DG7B9", True, 7))
     assert puzzles.activity_card(entry).note_tags == puzzles.puzzle_tags(["middlegame"], True)
 
@@ -525,12 +525,12 @@ class FakeCollection:
 
 def test_organize_moves_and_retags_without_touching_fields(anki_ops, monkeypatch):
     monkeypatch.setattr(anki_ops, "ids2str", lambda ids: "(" + ",".join(str(i) for i in ids) + ")")
-    old = FakeNote(1, ["lichess", "lichess::puzzle", "lichess::puzzle::mateIn1", "my_tag"], ["pgn", "text"])
-    done = FakeNote(2, ["lichess", "lichess::puzzle", "lichess::puzzle::solved"], ["pgn2", "text2"])
+    old = FakeNote(1, ["lichess", "lichess::puzzle", "lichess::puzzle::failed", "my_tag"], ["pgn", "text"])
+    done = FakeNote(2, ["lichess", "lichess::puzzle", "lichess::puzzle::result::solved"], ["pgn2", "text2"])
     # Card 11 is in a filtered deck (original deck 5): it stays there
     col = FakeCollection([old, done], [(10, 1, 5, 0), (11, 1, 7, 5), (20, 2, 101, 0)])
     stats = {}
-    solved_tags = ["lichess", "lichess::puzzle", "lichess::puzzle::solved"]
+    solved_tags = ["lichess", "lichess::puzzle", "lichess::puzzle::result::solved"]
     organize = [
         ([1], "Xadrez::Puzzles do Lichess::Errados", puzzles.puzzle_tags(["mateIn1"], False), "new text"),
         ([2], "Xadrez::Puzzles do Lichess::Acertados", solved_tags, None),  # None: the text stays
@@ -538,7 +538,7 @@ def test_organize_moves_and_retags_without_touching_fields(anki_ops, monkeypatch
     anki_ops.import_chapters(col, [], False, True, stats, "x", organize=organize)
     failed = col.decks_by_name["Xadrez::Puzzles do Lichess::Errados"]
     assert col.moved == {failed: [10]}  # the filtered card and the one already in place stay
-    new_tags = ["lichess", "lichess::puzzle", "lichess::puzzle::theme::mateIn1", "lichess::puzzle::failed"]
+    new_tags = ["lichess", "lichess::puzzle", "lichess::puzzle::theme::mateIn1", "lichess::puzzle::result::failed"]
     assert old.tags == ["my_tag", *new_tags]  # the user's tag stays
     assert old.fields == ["pgn", "new text"]  # the PGN stays
     assert done.fields == ["pgn2", "text2"] and col.updated == [old]  # note 2 had nothing to change
@@ -554,12 +554,17 @@ def test_organize_moves_and_retags_without_touching_fields(anki_ops, monkeypatch
 def test_puzzle_placement():
     from lsi import decks
 
-    assert decks.puzzle_placement("Xadrez::Puzzles do Lichess", False).deck == "Xadrez::Puzzles do Lichess::Errados"
-    assert decks.puzzle_placement("Xadrez::Puzzles do Lichess", True).deck == "Xadrez::Puzzles do Lichess::Acertados"
-    assert decks.puzzle_placement("Xadrez::Puzzles do Lichess", None).deck == "Xadrez::Puzzles do Lichess"
+    def deck(themes, root="Xadrez::Puzzles do Lichess"):
+        return decks.puzzle_placement(root, themes).deck
+
+    assert deck(["crushing", "endgame", "fork", "short"]) == "Xadrez::Puzzles do Lichess::Táticas::Garfo"
+    assert deck(["mate", "mateIn2", "backRankMate"]) == "Xadrez::Puzzles do Lichess::Mates::Mate do corredor"
+    assert deck(["endgame", "rookEndgame", "advantage"]) == "Xadrez::Puzzles do Lichess::Finais::Final de torres"
+    assert deck(["advantage", "middlegame", "short"]) == "Xadrez::Puzzles do Lichess::Outros"
+    assert deck([]) == "Xadrez::Puzzles do Lichess::Outros"
     i18n.set_language("en")
-    assert decks.puzzle_placement("Chess::Lichess puzzles", False).deck == "Chess::Lichess puzzles::Failed"
-    assert decks.puzzle_placement("Chess::Lichess puzzles", True).deck == "Chess::Lichess puzzles::Solved"
+    assert deck(["mateIn2", "mate", "short"], "Chess::Lichess puzzles") == "Chess::Lichess puzzles::Mates::Mate in 2"
+    assert deck(["opening", "pin"], "Chess::Lichess puzzles") == "Chess::Lichess puzzles::Tactics::Pin"
 
 
 def test_the_text_above_the_board(anki_ops):

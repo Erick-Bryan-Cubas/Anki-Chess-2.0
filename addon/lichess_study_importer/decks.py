@@ -9,6 +9,7 @@ Where each imported card goes: deck and extra tags.
                                         rebuilt on the board
     <root>::Openings::<family>          Chess.com opening, book moves, book lines (+ tag)
     <root>::My games::<error type>      Chess.com errors and missed mates
+    <puzzle deck>::<group>::<theme>     Lichess puzzles, by their main theme
 
 Pure Python (no aqt imports) so it can be unit tested outside Anki.
 """
@@ -23,6 +24,7 @@ from .chess_lib import chess, read_pgn
 from .i18n import STRINGS, tr
 from .openings import follow_book, load_book
 from .pgn_split import KIND_EXERCISE, KIND_GAME, KIND_LINE, KIND_STRUCTURE, Chapter
+from .puzzle_themes import GROUP_OTHER, primary_theme, theme_name
 
 OPENING_KINDS = ("opening", "book", "book_line")  # game_analysis kinds filed by opening
 KIND_KEY_MOVE = "key_move"  # "find the move" card made from an annotated game (expand.py)
@@ -218,11 +220,22 @@ def study_deck(ch: Chapter, root: str, fallback_study: str = "") -> str:
     return f"{root}::{study_name(ch, fallback_study)}"
 
 
-def puzzle_placement(deck: str, win: bool | None) -> Placement:
-    """A Lichess puzzle's deck: the Failed or Solved subdeck, by your result (a link's: the deck)."""
-    if win is None:
-        return Placement(deck)
-    return Placement(f"{deck}::{tr('deck.puzzles_solved' if win else 'deck.puzzles_failed')}")
+def puzzle_placement(deck: str, themes: list[str]) -> Placement:
+    """
+    A Lichess puzzle's deck, by its main theme (puzzle_themes.primary_theme):
+    <deck>::<group>::<theme>, e.g. Lichess puzzles::Tactics::Fork, or <deck>::Other
+    when it has none of the themes that make a deck. Failed and solved puzzles share it.
+    """
+    return Placement(clean_deck_name(f"{deck}::{puzzle_subdeck(themes)}"))
+
+
+def puzzle_subdeck(themes: list[str]) -> str:
+    """The subdeck of a puzzle's main theme inside the puzzle deck: Tactics::Fork, or Other."""
+    primary = primary_theme(themes)
+    if primary is None:
+        return tr(f"deck.puzzle_group.{GROUP_OTHER}")
+    group, key = primary
+    return f"{tr(f'deck.puzzle_group.{group}')}::{deck_part(theme_name(key))}"
 
 
 def place_game_card(card, root: str) -> Placement:

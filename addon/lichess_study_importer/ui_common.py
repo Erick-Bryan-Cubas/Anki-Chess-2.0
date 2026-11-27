@@ -18,6 +18,7 @@ from aqt.qt import (
     QColor,
     QDialog,
     QDialogButtonBox,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QIcon,
@@ -29,6 +30,7 @@ from aqt.qt import (
     QPlainTextEdit,
     QPointF,
     QPolygonF,
+    QPushButton,
     QRectF,
     Qt,
     QTableWidget,
@@ -174,6 +176,65 @@ def paint_status(item: QTableWidgetItem, status: str, widget: QWidget):
         font = item.font()
         font.setBold(True)
         item.setFont(font)
+
+
+# A puzzle's result: the red and green of the card's dot, (light theme, dark theme)
+RESULT_COLORS = {
+    "failed": ("#c62828", "#ef9a9a"),
+    "solved": ("#2e7d32", "#81c784"),
+}
+# Chip backgrounds (r, g, b), translucent: they read on light and dark themes
+CHIP_TINTS = {"neutral": (127, 127, 127), "failed": (229, 57, 53), "solved": (67, 160, 71)}
+
+
+def result_color(result: str, widget: QWidget) -> QColor | None:
+    colors = RESULT_COLORS.get(result)
+    return QColor(colors[is_dark(widget)]) if colors else None
+
+
+def style_primary(button: QPushButton):
+    """
+    The main action of a page: filled with the theme's highlight colour, so it stands
+    out from the other buttons on light and dark themes.
+    """
+    # The active colours: a button disabled now would give the greyed-out ones
+    palette, active = button.palette(), QPalette.ColorGroup.Active
+    fill = palette.color(active, QPalette.ColorRole.Highlight)
+    text = palette.color(active, QPalette.ColorRole.HighlightedText)
+    muted = palette.color(active, QPalette.ColorRole.PlaceholderText)
+    button.setObjectName("ankiChessPrimary")
+    button.setStyleSheet(
+        f"#ankiChessPrimary {{ background: {fill.name()}; color: {text.name()};"
+        f" border: 1px solid {fill.darker(120).name()}; border-radius: 5px; padding: 4px 16px; font-weight: 600; }}"
+        f" #ankiChessPrimary:hover {{ background: {fill.lighter(112).name()}; }}"
+        f" #ankiChessPrimary:pressed {{ background: {fill.darker(112).name()}; }}"
+        f" #ankiChessPrimary:disabled {{ background: transparent; color: {muted.name()};"
+        " border: 1px solid rgba(127, 127, 127, 0.45); }"
+    )
+
+
+def style_card(frame: QFrame):
+    """A panel set apart from the page: a light tint and rounded border, on any theme."""
+    frame.setObjectName("ankiChessCard")
+    frame.setStyleSheet(
+        "#ankiChessCard { background: rgba(127, 127, 127, 0.08);"
+        " border: 1px solid rgba(127, 127, 127, 0.28); border-radius: 8px; }"
+    )
+
+
+class Chip(QLabel):
+    """A count in a rounded tag (127 puzzles, 12 failed), tinted by kind."""
+
+    def __init__(self, kind: str = "neutral", parent=None):
+        super().__init__(parent)
+        self.setTextFormat(Qt.TextFormat.RichText)
+        r, g, b = CHIP_TINTS[kind]
+        color = result_color(kind, self)
+        text = f" color: {color.name()};" if color is not None else ""
+        self.setStyleSheet(
+            f"QLabel {{ background: rgba({r}, {g}, {b}, 0.16); border: 1px solid rgba({r}, {g}, {b}, 0.35);"
+            f" border-radius: 8px; padding: 2px 10px;{text} }}"
+        )
 
 
 def plan_text(statuses: list[str], update: bool) -> str:

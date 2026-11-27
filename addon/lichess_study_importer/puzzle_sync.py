@@ -1,8 +1,8 @@
 """
 Puzzle sync in Anki: import the puzzles you played on Lichess that aren't in Anki yet,
-all of them or only the failed ones (puzzle_sync_failed_only), into the Failed and
-Solved subdecks of the puzzle deck. The steps are in sync_flow.py; this module runs
-them with Anki's operations, progress window and messages.
+only the failed ones (the default) or the solved ones too (puzzle_sync_solved), into
+a subdeck of the puzzle deck per main theme (decks.puzzle_placement). The steps are in
+sync_flow.py; this module runs them with Anki's operations, progress window and messages.
 
 - "Sync now" on the Puzzles page, and the button at the end of Anki's menu bar
   (puzzle_sync_button, menu_bar.py), run it with a progress window: Esc stops,
@@ -16,7 +16,6 @@ them with Anki's operations, progress window and messages.
 
 from __future__ import annotations
 
-import time
 import weakref
 from typing import Callable
 
@@ -29,6 +28,7 @@ from . import anki_ops, decks
 from .i18n import tr
 from .menu_bar import add_button
 from .puzzle_cache import FOLDER
+from .puzzles import when_text
 from .sync_flow import PUZZLE_LAYOUT, SyncFlow, SyncSettings
 from .token_panel import token_events
 from .ui_common import (
@@ -67,7 +67,7 @@ def last_sync_text(config: dict | None = None) -> str:
     at = (get_config() if config is None else config).get("puzzle_sync_at")
     if not at:
         return tr("puzzle.sync_never")
-    return tr("puzzle.sync_last", date=time.strftime("%Y-%m-%d %H:%M", time.localtime(at / 1000)))
+    return tr("puzzle.sync_last", date=when_text(at))
 
 
 def add_listener(method: Callable[[str], None]):
@@ -227,7 +227,8 @@ def sync_puzzles(parent, interactive: bool = True, done: Callable[[str], None] |
         token=token,
         user=cache_user(config),
         since=int(config.get("puzzle_sync_since") or 0) if current_layout else 0,
-        failed_only=bool(config.get("puzzle_sync_failed_only", False)),
+        # A new key: older versions saved puzzle_sync_failed_only false (all) by default
+        failed_only=not config.get("puzzle_sync_solved", False),
         fetch_games=bool(config.get("puzzle_fetch_games", True)),
         deck=puzzle_deck(config),
         base=base,

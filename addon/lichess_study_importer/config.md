@@ -33,13 +33,15 @@
   import window).
 - **lichess_username**: last user whose studies were listed (`User's studies…`).
 - **puzzle_max** / **puzzle_all**: how many of your latest puzzles to load, or your whole puzzle history.
+- **puzzle_show_solved**: the list of your puzzles shows the solved ones too (`false`, the default: only the failed ones).
 - **puzzle_failed_only**: loading checks only the failed puzzles (the last of the "All" and "Only the failed
   ones" buttons clicked).
 - **puzzle_fetch_games**: fetch each imported puzzle's game, so the card starts with the opponent's last
   move (about 0.6 s per puzzle). `false` imports the puzzles of your activity at once, starting at the
   puzzle position.
-- **puzzle_deck**: deck of the Lichess puzzles. Empty = `<root>::Lichess puzzles`.
-- **puzzle_sync_failed_only**: the puzzle sync imports only the puzzles you failed (`false`: all of them).
+- **puzzle_deck**: deck of the Lichess puzzles, with a subdeck per main theme (`Tactics::Fork`, `Mates::Mate in 2`, `Endgames::Rook endgame`, `Other`). Empty = `<root>::Lichess puzzles`.
+- **puzzle_sync_solved**: the puzzle sync imports the puzzles you solved too (`false`, the default: only the ones you failed).
+  It replaces `puzzle_sync_failed_only`, which older versions saved as `false` (import all) by default.
 - **puzzle_sync_on_open**: sync the puzzles when the profile opens, quietly, once a first sync was made
   with "Sync now".
 - **puzzle_sync_hourly**: while Anki is open, sync the puzzles every hour, quietly (not while you review:
